@@ -254,12 +254,23 @@ let table: (Int, Str, Str) = file("mytable.csv").parse_csv(); # implicitly use t
 let table = file("mytable.csv").parse_csv<(Int, Str, Str)>(); # implicit `table` type from explicit parse_csv template param
 
 # so, parse_csv can look something like:
-fn parse_csv(file): <a is Tuple> {
+fn parse_csv(file): 'a is Tuple {
     let to_return: a;
     for i in a.size {
         a[i] = file.next() as a@i; # a@i returns the type of element `i` in `a`
     }
     return a;
+}
+```
+
+Vararg
+```mir
+# ... indicate that the last argument is array slice `Int[]`, where params are passed one by one
+# UNLESS THERE'S SOMETHING WRONG WITH DOING IT, you can also pass
+fn vararg(num: Int, ...): Int {
+    let sum = 0;
+    for i in num { sum += i; }
+    return sum;
 }
 ```
 
@@ -303,3 +314,15 @@ fn unionReturn(): Int|Str {
     return line;
 }
 ```
+
+- It seems like a lot of the time I start relying on aggregated types:
+  - Union
+  - Tuple
+  - Enum
+- Is it good? Probably not. I'm not sure if it's *too* bad, either.
+- Like, knowing something is *a* union lets me use `switch { is Datatype: ... }`
+- Knowing something is *a* tuple... 
+
+***
+
+I'm trying to use tuples as if they were arrays
