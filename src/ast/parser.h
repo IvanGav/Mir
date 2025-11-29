@@ -56,9 +56,9 @@ struct Parser {
 
                     Token next = t.next_token(); // consume `(`
                     while(next.tt != TokenType::RightParenthese) {
-                        // TODO error checking for `eof`, `;`, `]` and the likes of werid nonsensival args; or later maybe
+                        // TODO error checking for `eof`, `;`, `]` and the likes of werid nonsensical args; or later maybe
                         if(next.tt == TokenType::Comma) { continue; } // commas delimit arguments
-                        call->args.push(next_node());
+                        call->args.push(this->next_expr());
                         next = t.next_token(); // get `,` or `)`
                     }
                     return call;
@@ -69,14 +69,17 @@ struct Parser {
                 }
             }
 
-            // Binary operator; because of how the parser works,
-            // any unary operators will be found by `next_expr`
-            // TODO not quite right
+            // Operator; assume unary if both exist for a given symbol
             case TokenType::Special: {
                 NodeOp* op = node_arena->alloc<NodeOp>(1);
                 op->token = token;
-                if (token.val == "+"_s) op->op = OpType::Add;
-                else if (token.val == "-"_s) op->op = OpType::Sub;
+                
+                if (token.val == "-"_s) op->op = OpType::Neg;
+                else if (token.val == "!"_s) op->op = OpType::LogiNot;
+                else if (token.val == "~"_s) op->op = OpType::BitNot;
+
+                else if (token.val == "+"_s) op->op = OpType::Add;
+                // else if (token.val == "-"_s) op->op = OpType::Sub;
                 else if (token.val == "*"_s) op->op = OpType::Mul;
                 else if (token.val == "/"_s) op->op = OpType::Div;
                 else if (token.val == "%"_s) op->op = OpType::Mod;
@@ -95,13 +98,20 @@ struct Parser {
             case TokenType::While:
             case TokenType::VarDecl:
             case TokenType::FunctionDecl:
-            case TokenType::Return:
                 panic;
 
+            case TokenType::Return: {
+                NodeRet* r = node_arena->alloc<NodeRet>(1);
+                r->token = token;
+                r->val = this->next_expr();
+                return r;
+            }
+
             case TokenType::LeftParenthese: {
-                // TODO: parse parenthesized expression
-                // ( expr )
-                panic;
+                Node* expr = this->next_expr();
+                Token _right_parenthese = t.next_token();
+                assert(_right_parenthese.val == ")"_s);
+                return expr;
             }
 
             case TokenType::LeftBracket: {
@@ -110,8 +120,14 @@ struct Parser {
             }
 
             case TokenType::LeftCurly: {
-                // TODO: parse block of statements { ... }
-                panic;
+                NodeBlock* block = node_arena->alloc<NodeBlock>(1);
+                Token next = t.next_token();
+                while(next.tt == TokenType::EndOfLine) {
+                    Node* expr = this->next_expr();
+                    block->list.push(expr);
+                    next = t.next_token();
+                }
+                return block;
             }
 
             case TokenType::EndOfFile:
@@ -139,17 +155,18 @@ struct Parser {
     // - `;` - it's a statement
     // `nullptr` means that source has been fully parsed
     Node* next_expr() {
-        Token token = t.next_token();
+        Node* node = this->next_node();
 
-        // some AI was used here; everything manually inspected and modified
-        switch(token.tt) {
+        switch(node->token.tt) {
             /*
-                Simple term
+                Primary expression
             */
 
             case TokenType::LeftParenthese: // grouping
             case TokenType::LeftCurly: // basic block
-            case TokenType::Identifier: // either variable or function call
+            case TokenType::Identifier: // variable access or function call
+            case TokenType::Special: // unary operator
+            case TokenType::If: // can be an expression aka return a value
             case TokenType::IntLiteral:
             case TokenType::FloatLiteral:
             case TokenType::StringLiteral: {
@@ -158,45 +175,15 @@ struct Parser {
             }
 
             /*
-                Unary operator
-            */
-
-            // TODO not quite right
-            case TokenType::Special: {
-                NodeOp* op = node_arena->alloc<NodeOp>(1);
-                op->token = token;
-                if (token.val == "-"_s) op->op = OpType::Neg;
-                else if (token.val == "!"_s) op->op = OpType::LogiNot;
-                else if (token.val == "~"_s) op->op = OpType::BitNot;
-                else panic;
-                return op;
-            }
-
-            /*
                 Special language constructs; don't require extra processing as `next_node` will read them in their entirety
+                Doesn't include `if` only because it may be a part of a primary expression, while these are standalone
             */
 
-            case TokenType::If: {
-                panic;
-            }
-            
-            case TokenType::While: {
-                panic;
-            }
-            
-            case TokenType::VarDecl: {
-                panic;
-            }
-
-            case TokenType::FunctionDecl: {
-                panic;
-            }
-
+            case TokenType::While:
+            case TokenType::VarDecl:
+            case TokenType::FunctionDecl:
             case TokenType::Return: {
-                NodeRet* r = node_arena->alloc<NodeRet>(1);
-                r->token = token;
-                r->val = next_expr();
-                return r;
+                return node;
             }
             
             // Array declaration; if index, it would've been read as part of simple term expression
@@ -207,7 +194,7 @@ struct Parser {
             // empty line or something
             // TODO may be a problem for `for` statements?
             case TokenType::EndOfLine: {
-                return next_expr();
+                return this->next_expr();
             }
 
             case TokenType::EndOfFile: {

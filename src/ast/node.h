@@ -72,3 +72,8 @@ struct NodeFnDef : Node {
     Node* body;
     void codegen(Vec<u8>& gen) {}
 };
+
+struct NodeBlock : Node {
+    Vec<Node*> list;
+    void codegen(Vec<u8>& gen) {}
+};
