@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tokenizer.h"
 #include "parser.h"
 
 std::ostream& operator<<(std::ostream& os, TokenType type) {

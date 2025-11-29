@@ -51,7 +51,9 @@ typedef double f64;
 #define KB *1024
 #define MB *1024*1024
 
-#define unreachable assert(false); exit(1);
+#define unreachable { assert(false); exit(1); }
+
+#define panic { printf("BAD SYNTAX"); assert(false); exit(1); }
 
 #define min(a, b) a > b ? b : a
 #define max(a, b) a > b ? a : b

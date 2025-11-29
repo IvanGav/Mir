@@ -5,8 +5,8 @@
 #include "core/debug.h"
 #include "core/map.h"
 
-#include "parser/parser.h"
-#include "parser/parser_debug.h"
+#include "token/tokenizer.h"
+#include "token/debug.h"
 
 Str readFile(const char* path, mem::Arena& arena = default_arena) {
     std::ifstream infile(path);
@@ -18,12 +18,13 @@ enum class Test {
 };
 
 int main() {
-    mem::Arena arena = mem::Arena::create(1024*1024);
-    // Str src = readFile("src.mir");
-    // Parser p { .source = src };
-    // while(!p.eof()) {
-    //     std::cout << p.next_token() << std::endl;
-    // }
+    mem::Arena node_arena = mem::Arena::create(1 MB);
+    mem::Arena arena = mem::Arena::create(1 KB);
+    Str src = readFile("src.mir");
+    Tokenizer p { .source = src };
+    while(!p.eof()) {
+        std::cout << p.next_token() << std::endl;
+    }
 
     // HMap<u32, u32> m = HMap<u32, u32>::empty(arena);
     // m.add(1, 10);
@@ -35,12 +36,12 @@ int main() {
     // std::cout << "(" << (u16) m[2] << ")" << std::endl;
     // std::cout << "(" << (u16) m[107] << ")" << std::endl;
 
-    HMap<Test, u32> m = HMap<Test, u32>::empty(arena);
-    m.add(Test::one, 10);
-    m.add(Test::factorio, 'a');
-    m.add(Test::twelve, 100);
-    m.add(Test::factorio, 101);
-    std::cout << "(" << m[Test::twelve] << ")" << std::endl;
-    std::cout << "(" << m[Test::one] << ")" << std::endl;
-    std::cout << "(" << m[Test::factorio] << ")" << std::endl;
+    // HMap<Test, u32> m = HMap<Test, u32>::empty(arena);
+    // m.add(Test::one, 10);
+    // m.add(Test::factorio, 'a');
+    // m.add(Test::twelve, 100);
+    // m.add(Test::factorio, 101);
+    // std::cout << "(" << m[Test::twelve] << ")" << std::endl;
+    // std::cout << "(" << m[Test::one] << ")" << std::endl;
+    // std::cout << "(" << m[Test::factorio] << ")" << std::endl;
 }

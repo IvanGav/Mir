@@ -3,35 +3,14 @@
 #include "../core/prelude.h"
 #include "../core/str.h"
 
-namespace ch {
-    // end of a character string
-    bool white(u8 ch) {
-        return ch == ' ' || ch == '\n' || ch == '\t' || ch == '\r';
-    }
-    bool num(u8 ch) {
-        return ch >= '0' && ch <= '9';
-    }
-    bool alpha(u8 ch) {
-        return ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
-    }
-    bool alphanum(u8 ch) {
-        return ch::num(ch) || ch::alpha(ch);
-    }
-    bool bracket(u8 ch) {
-        return ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == '(' || ch == ')';
-    }
-    bool semicol(u8 ch) {
-        return ch == ';';
-    }
-    bool comment(u8 ch) {
-        return ch == '#';
-    }
-}
+#include "util.h"
 
 enum class TokenType {
-    EndOfFile, EndOfLine, IntLiteral, FloatLiteral, StringLiteral, Return, Operator, Identifier,
-    If, While, VarDecl, FunctionDecl,
-    LeftParenthese, RightParenthese, LeftBracket, RightBracket, LeftCurly, RightCurly,
+    Undefined, EndOfFile, EndOfLine, Comma, // special identifiers
+    IntLiteral, FloatLiteral, StringLiteral, // literals
+    If, While, VarDecl, FunctionDecl, Return, // keywords (respective): `if`, `while`, `let`, `fn`, `return`
+    LeftParenthese, RightParenthese, LeftBracket, RightBracket, LeftCurly, RightCurly, // brackets of all kinds
+    Identifier, DataType, Special, // other
 };
 
 struct Token {
@@ -39,16 +18,26 @@ struct Token {
     TokenType tt;
 };
 
-struct Parser {
+// `next_type` and `next_token` are the only methods that should be called externally
+// `parse_*` methods will assume that `this` is already at the correct token and will consume that token, returning it as a slice
+// `next_*` methods will read the next token and return it (as a `Token`)
+// `skip_*` methods will consume some amount of characters and not return any slice
+struct Tokenizer {
     Str source;
     usize at;
 
     void reset() { at = 0; }
 
     // return '\0' if at end of file
-    // be careful at exclusive while loops (such as one in `Parser::skip_comment()`)
+    // be careful at exclusive while loops (such as one in `Tokenizer::skip_comment()`)
     u8 peek() { if(this->eof()) { return '\0'; } return source[at]; }
     u8 peek_non_white() { this->skip_white(); return this->peek(); }
+    // can return a very limited amount of types of tokens
+    // specifically, it will only look at the first character of the next token and try to decide on that
+    // TokenType peek_token() {
+    //     u8 next_char = this->peek_non_white();
+    //     return TokenType::Undefined;
+    // }
     bool eof() { return at >= source.size; }
     bool is_at_comment() { return this->peek() == '#'; }
     void skip_white() {
@@ -89,7 +78,7 @@ struct Parser {
             ch::alphanum(source[at]) ||
             ch::white(source[at]) ||
             ch::bracket(source[at]) ||
-            ch::semicol(source[at]) ||
+            ch::delim(source[at]) ||
             this->is_at_comment()
         ));
         usize start = at;
@@ -98,7 +87,7 @@ struct Parser {
             ch::alphanum(source[at]) ||
             ch::white(source[at]) ||
             ch::bracket(source[at]) ||
-            ch::semicol(source[at]) ||
+            ch::delim(source[at]) ||
             this->is_at_comment()
         )) { at++; }
         return source.slice_range(start, at);
@@ -115,6 +104,16 @@ struct Parser {
         return source.slice_range(start, at);
     }
 
+    // upon call, expected to have `source[at]` to be the beginning of a type
+    // after being called, `source[at]` will be the character right after end of the type
+    Str parse_type() {
+        // TODO do more than just this
+        Str t = source.slice(at, 3);
+        at+=3;
+        assert(t == "u64"_s);
+        return t;
+    }
+
     Token next_bracket() {
         Token t { source.slice(at, 1) };
         at++;
@@ -127,7 +126,18 @@ struct Parser {
         return t;
     }
 
-    // Cannot read a `TokenType::Type` token type; if you expect a type to be read, use `Parser::next_type_token()` instead
+    Token next_type() {
+        this->skip_white();
+        while(this->is_at_comment()) {
+            this->skip_comment();
+            this->skip_white();
+        }
+        if(this->eof()) return Token { source.slice(at, 0), TokenType::EndOfFile };
+        // ^^^ basic error skipping and error checking
+        Token type_token = { this->parse_type(), TokenType::DataType };
+    }
+
+    // Cannot read a `TokenType::DataType` token type; if you expect a type to be read, use `Tokenizer::next_type_token()` instead
     Token next_token() {
         this->skip_white(); // ignore leading whitespace
         while(this->is_at_comment()) {
@@ -137,6 +147,9 @@ struct Parser {
         if(this->eof()) return Token { source.slice(at, 0), TokenType::EndOfFile };
         if(this->peek() == ';') {
             return Token { source.slice(at++, 1), TokenType::EndOfLine };
+        }
+        if(this->peek() == ',') {
+            return Token { source.slice(at++, 1), TokenType::Comma };
         }
         if(this->peek() == '"') {
             return Token { this->parse_string_literal(), TokenType::StringLiteral };
@@ -156,6 +169,6 @@ struct Parser {
             return Token { token_val, TokenType::Identifier }; // generic identifier
         }
         // assume an operator
-        return Token { this->parse_operator(), TokenType::Operator };
+        return Token { this->parse_operator(), TokenType::Special };
     }
 };
