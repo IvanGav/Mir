@@ -1,7 +1,6 @@
 #pragma once
 
 #include "tokenizer.h"
-#include "parser.h"
 
 std::ostream& operator<<(std::ostream& os, TokenType type) {
     switch (type) {
@@ -11,7 +10,7 @@ std::ostream& operator<<(std::ostream& os, TokenType type) {
         case TokenType::FloatLiteral:       return os << "FloatLiteral";
         case TokenType::StringLiteral:      return os << "StringLiteral";
         case TokenType::Return:             return os << "Return";
-        case TokenType::Operator:           return os << "Operator";
+        case TokenType::Special:            return os << "Special";
         case TokenType::Identifier:         return os << "Identifier";
         case TokenType::LeftParenthese:     return os << "LeftParenthese";
         case TokenType::RightParenthese:    return os << "RightParenthese";
