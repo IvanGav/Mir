@@ -1,26 +1,14 @@
-# Notes
+# Mir
 
-The posets talked about from the beginning are just DAGs pretty much.
+It's a low level-ish language. Still very much wip.
 
-When talking about *meet* of a lattice (including types), it just means where do they meet when going down the graph such as [this](<https://github.com/SeaOfNodes/Simple/tree/main/chapter04#changes-to-type-system>)
-
-Top = maybe a constant?
-Bottom = definitely not a constant (but still that given type)
-
-A "starting" list of peephole optimizations [here](<https://github.com/SeaOfNodes/Simple/tree/main/chapter04#more-peephole-optimizations>)
-
-USE ASSERTS ANYWHERE I SEE FIT THEY MIGHT SPARE ME A HEADACHE
-
-When looking at idealize(), most of the time I assume that both variables are NOT constants; aka variables or whatever else
-So when they compare by pointer, that's because if I'm using EXACTLY THE SAME node = value pointed by a variable
-
-IF I understood correctly, after the while loop, all variables will be bound to a phi node (at least before ch8)
+I plan to use llvm for this project.
 
 # Notes for different systems
 
 In `core/hash.h`, the type `usize` is the same as `u64` on my machine... not sure if that's true in general.
 
-# Features
+# Features (planned, and may be completely changed)
 
 Types:
 - Signed integer types: `i8`, `i16`, etc
@@ -84,21 +72,9 @@ If extra time:
 - Unsized array type: `type..` or `type[?]`
   - Acts like an array, but does not have size. Basically any C/C++ array pointer
 
-# Biggest memory related problems:
+# Biggest memory related problems (general)
 - Buffer overflow
 - Use after free
 - Double free
 - Out of bounds write
 - Integer overflow
-
-# Ramble ramble
-
-So, let's say every object has an owner.
-For a moment, let's forget about stack and heap.
-Owner is: **the** unique pointer to the object.
-
-Assume a self contained function.
-
-All memory it accesses is contained within itself.
-
-I don't want to do any memory stores/loads. At all.
