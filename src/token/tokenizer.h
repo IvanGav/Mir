@@ -116,11 +116,16 @@ struct Tokenizer {
     // upon call, expected to have `source[at]` to be the beginning of a type
     // after being called, `source[at]` will be the character right after end of the type
     Str parse_type() {
-        // TODO do more than just this
-        Str t = source.slice(at, 3);
-        at+=3;
-        assert(t == "u64"_s || t == "Str"_s);
-        return t;
+        Str base = this->parse_identifier();
+        // type can be followed by *
+        // TODO expand to arrays later
+        while(this->peek() == '*') { at++; base.size++; } // very unintended by the `Str`, but should be safe here
+        return base;
+        // // TODO do more than just this
+        // Str t = source.slice(at, 3);
+        // at+=3;
+        // assert(t == "u64"_s || t == "Str"_s);
+        // return t;
     }
 
     Token next_bracket() {

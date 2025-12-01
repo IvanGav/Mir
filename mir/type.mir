@@ -1,0 +1,10 @@
+let i1: u8 = 0;
+let i2: i64 = 0;
+let i3: Str = "hello world";
+let i4: u64* = 0;
+let i4: u32*** = 0;
+# let i5: [u64]* = 0;
+# let i6: [u64; 10] = 0;
+# let i7: [u64; 5]** = 0;
+# let i8: [u64*; 5]* = 0;
+# let i8: [Str]& = 0;

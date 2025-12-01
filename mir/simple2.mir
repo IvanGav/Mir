@@ -5,7 +5,7 @@ let global_var: u64 = (2 / 5 + 2);
 let global_var: u64 = (3 / 5 + 2) - 1;
 let global_var: u64 = (4 / 5 + 2) - 1 * (!1);
 let global_var: u64 = ((4 / 5 + 2) - 1 * (!1) + 1);
-# let global_str: Str = "hello world";
+let global_str: Str = "hello world";
 
 fn main(argc: u64, argv: u64): u64 {
     let local_var:u64=----1;
