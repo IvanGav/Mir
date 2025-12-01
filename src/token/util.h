@@ -26,4 +26,10 @@ namespace ch {
     bool comment(u8 ch) {
         return ch == '#';
     }
+
+    // TODO maybe shouldn't be here?
+    // symbols that terminate an "expression" (see parser.h)
+    bool terminal(u8 ch) {
+        return ch == ')' || ch == ']' || ch == '}' || ch == ';' || ch == ',' || ch == '\0';
+    }
 }

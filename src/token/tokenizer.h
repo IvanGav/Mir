@@ -8,7 +8,7 @@
 enum class TokenType {
     Undefined, EndOfFile, EndOfLine, Comma, // special identifiers
     IntLiteral, FloatLiteral, StringLiteral, // literals
-    If, While, VarDecl, FunctionDecl, Return, // keywords (respective): `if`, `while`, `let`, `fn`, `return`
+    If, Else, While, VarDecl, FunctionDecl, Return, // keywords (respective): `if`, `else`, `while`, `let`, `fn`, `return`
     LeftParenthese, RightParenthese, LeftBracket, RightBracket, LeftCurly, RightCurly, // brackets of all kinds
     Identifier, DataType, Special, // other
 };
@@ -26,12 +26,16 @@ struct Tokenizer {
     Str source;
     usize at;
 
+    static Tokenizer create(Str src) {
+        return Tokenizer { .source = src, .at = 0 };
+    }
+
     void reset() { at = 0; }
 
     // return '\0' if at end of file
     // be careful at exclusive while loops (such as one in `Tokenizer::skip_comment()`)
     u8 peek() { if(this->eof()) { return '\0'; } return source[at]; }
-    u8 peek_non_white() { this->skip_white(); return this->peek(); }
+    u8 peek_non_white() { this->skip_white(); while(this->is_at_comment()) { this->skip_comment(); this->skip_white(); } return this->peek(); }
     // can return a very limited amount of types of tokens
     // specifically, it will only look at the first character of the next token and try to decide on that
     // TokenType peek_token() {
@@ -110,7 +114,7 @@ struct Tokenizer {
         // TODO do more than just this
         Str t = source.slice(at, 3);
         at+=3;
-        assert(t == "u64"_s);
+        assert(t == "u64"_s || t == "Str"_s);
         return t;
     }
 
@@ -135,6 +139,7 @@ struct Tokenizer {
         if(this->eof()) return Token { source.slice(at, 0), TokenType::EndOfFile };
         // ^^^ basic error skipping and error checking
         Token type_token = { this->parse_type(), TokenType::DataType };
+        return type_token;
     }
 
     // Cannot read a `TokenType::DataType` token type; if you expect a type to be read, use `Tokenizer::next_type_token()` instead
@@ -163,9 +168,11 @@ struct Tokenizer {
         if(ch::alpha(this->peek())) {
             Str token_val = this->parse_identifier();
             if(token_val == "if"_s) return Token { token_val, TokenType::If };
+            if(token_val == "else"_s) return Token { token_val, TokenType::Else };
             if(token_val == "while"_s) return Token { token_val, TokenType::While };
             if(token_val == "let"_s) return Token { token_val, TokenType::VarDecl };
             if(token_val == "fn"_s) return Token { token_val, TokenType::FunctionDecl };
+            if(token_val == "return"_s) return Token { token_val, TokenType::Return };
             return Token { token_val, TokenType::Identifier }; // generic identifier
         }
         // assume an operator

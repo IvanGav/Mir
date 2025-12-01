@@ -84,3 +84,5 @@ usize next_prime_size(usize n) {
     }
     unreachable;
 }
+
+#define printd(expr) std::cout << "--DEBUG " #expr ": " << expr << std::endl;

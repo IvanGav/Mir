@@ -56,6 +56,15 @@ struct Vec {
         size++;
     }
 
+    void push(T& e) {
+        if(size == capacity) {
+            if(capacity == 0) reserve(8);
+            else reserve(capacity*2);
+        }
+        data[size] = e;
+        size++;
+    }
+
     T pop() {
         assert(size > 0);
         size--;

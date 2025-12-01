@@ -52,11 +52,10 @@ namespace mem {
 
         template <typename T>
         T* alloc(usize size) {
-            // printf("--ALLOC CALLED\n");
             void* ptr = cur;
             usize size_left = end_ptr-cur;
             if (std::align(alignof(T), sizeof(T) * size, ptr, size_left) == nullptr) {
-                printf("Could not allocate memory\n"); // TODO replace with my own print
+                std::cout << "Fatal: Could not allocate memory" << std::endl;
                 exit(1);
             }
             cur = (u8*) ptr + sizeof(T) * size;
@@ -65,7 +64,6 @@ namespace mem {
         
         template <typename T>
         T* realloc(T* ptr, usize last_size, usize new_size) {
-            // printf("--REALLOC CALLED\n");
             if(last_size >= new_size) {
                 // printf("----shrink from %ld to %ld\n", last_size, new_size);
                 // Shrink

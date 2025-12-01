@@ -1,0 +1,7 @@
+# this is a comment and should be disregarded
+
+let hi_there: u64 = 10;
+
+hi_there = 1 + 2;
+
+return hi_there * 15;

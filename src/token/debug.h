@@ -4,14 +4,18 @@
 
 std::ostream& operator<<(std::ostream& os, TokenType type) {
     switch (type) {
+        case TokenType::Undefined:          return os << "Undefined";
         case TokenType::EndOfFile:          return os << "EndOfFile";
         case TokenType::EndOfLine:          return os << "EndOfLine";
+        case TokenType::Comma:              return os << "Comma";
         case TokenType::IntLiteral:         return os << "IntLiteral";
         case TokenType::FloatLiteral:       return os << "FloatLiteral";
         case TokenType::StringLiteral:      return os << "StringLiteral";
         case TokenType::Return:             return os << "Return";
         case TokenType::Special:            return os << "Special";
         case TokenType::Identifier:         return os << "Identifier";
+        case TokenType::DataType:           return os << "DataType";
+
         case TokenType::LeftParenthese:     return os << "LeftParenthese";
         case TokenType::RightParenthese:    return os << "RightParenthese";
         case TokenType::LeftBracket:        return os << "LeftBracket";
@@ -20,6 +24,7 @@ std::ostream& operator<<(std::ostream& os, TokenType type) {
         case TokenType::RightCurly:         return os << "RightCurly";
         
         case TokenType::If:                 return os << "If";
+        case TokenType::Else:               return os << "Else";
         case TokenType::While:              return os << "While";
         case TokenType::VarDecl:            return os << "VarDecl";
         case TokenType::FunctionDecl:       return os << "FunctionDecl";

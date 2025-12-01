@@ -91,6 +91,16 @@ namespace str {
         v.reverse();
         return v.slice(0,v.size);
     }
+
+    template <typename T>
+    T to_int(Str str) {
+        T num = 0;
+        for(u8 i : str) {
+            num *= 10;
+            num += (i-'0');
+        }
+        return num;
+    }
 };
 
 Str operator ""_s(const char* s, long unsigned int len) {
