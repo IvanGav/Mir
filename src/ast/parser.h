@@ -87,27 +87,8 @@ struct Parser {
                 new (op) NodeOp;
                 op->token = token;
                 
-                // TODO rework this system here
-                if (token.val == "-"_s) op->op = OpType::Neg;
-                else if (token.val == "!"_s) op->op = OpType::LogiNot;
-                else if (token.val == "~"_s) op->op = OpType::BitNot;
-
-                else if (token.val == "+"_s) op->op = OpType::Add;
-                // else if (token.val == "-"_s) op->op = OpType::Sub;
-                else if (token.val == "*"_s) op->op = OpType::Mul;
-                else if (token.val == "/"_s) op->op = OpType::Div;
-                else if (token.val == "%"_s) op->op = OpType::Mod;
-                else if (token.val == "||"_s) op->op = OpType::LogiOr;
-                else if (token.val == "&&"_s) op->op = OpType::LogiAnd;
-                else if (token.val == "|"_s) op->op = OpType::BitOr;
-                else if (token.val == "&"_s) op->op = OpType::BitAnd;
-                else if (token.val == "^"_s) op->op = OpType::BitXor;
-                else if (token.val == "="_s) op->op = OpType::Assignment;
-                else if (token.val == "=="_s) op->op = OpType::Assignment; // TODO BAD I'M JUST LAZY
-                else {
-                    printd(token.val);
-                    panic;
-                }
+                op->op = op::from_str(token.val);
+                assert(op->op != op::OpType::Undefined);
 
                 // don't read other nodes; the caller of this function must determine the precidence and assign accordingly
                 return op;
@@ -189,10 +170,6 @@ struct Parser {
 
             case TokenType::LeftParenthese: {
                 Node* expr = this->next_expr();
-                // TODO DEBUG
-                // std::cout << "--DURING RUNTIME PRINTING THE LEFT PARENTHESE THINGY" << std::endl;
-                // expr->debug_print(); std::cout << std::endl;
-                // std::cout << "--ENDED" << std::endl;
                 Token _right_parenthese = t.next_token();
                 assert(_right_parenthese.val == ")"_s);
                 return expr;
@@ -350,7 +327,7 @@ struct Parser {
             // if unary operator, get its operand and apply
             // note that it is possible to have a fully applied op here (`next` has parsed `(1+1)`)
             // can be `!!!!true`, for all we know, so read unary until can't anymore
-            if(next->token.tt == TokenType::Special && dynamic_cast<NodeOp*>(next)->lhs == nullptr) {
+            if(next->token.tt == TokenType::Special && dynamic_cast<NodeOp*>(next)->rhs == nullptr) {
                 Node* cur = next;
                 while(cur->token.tt == TokenType::Special) {
                     Node* operand = this->next_term();
@@ -385,8 +362,8 @@ struct Parser {
             assert(op_node->token.tt == TokenType::Special); // is an operator (binary)
 
             // convert from unary to binary, if needed
-            if(dynamic_cast<NodeOp*>(op_node)->op == OpType::Neg) {
-                dynamic_cast<NodeOp*>(op_node)->op = OpType::Sub;
+            if(dynamic_cast<NodeOp*>(op_node)->op == op::OpType::Neg) {
+                dynamic_cast<NodeOp*>(op_node)->op = op::OpType::Sub;
             }
 
             // apply if conditions are met (a modified version of the shunting yard algorithm)
@@ -396,7 +373,7 @@ struct Parser {
             // then that operator is popped off the stack and added to the output" 
             // (https://en.wikipedia.org/wiki/Shunting_yard_algorithm)
             // TODO also make sure to account for `a < b < c` being invalid (although maybe handled with types alone?)
-            while(op_stack.size > 0 && has_precedence(
+            while(op_stack.size > 0 && op::has_precedence(
                 dynamic_cast<NodeOp*>(op_stack.back())->op,
                 dynamic_cast<NodeOp*>(op_node)->op
             )) {

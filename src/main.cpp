@@ -16,9 +16,13 @@ Str readFile(const char* path, mem::Arena& arena = default_arena) {
     return str::clone_cstr(std::string(std::istreambuf_iterator<char>(infile), std::istreambuf_iterator<char>()).data(), arena);
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     mem::Arena node_arena = mem::Arena::create(1 MB);
-    Str src = readFile("mir/simple2.mir");
+    Str src;
+    if(argc > 1)
+        src = readFile(argv[1]);
+    else
+        src = readFile("mir/simple2.mir");
 
     // Tokenizer t = Tokenizer::create(src);
     // while(!t.eof()) {

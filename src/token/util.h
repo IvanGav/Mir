@@ -32,4 +32,8 @@ namespace ch {
     bool terminal(u8 ch) {
         return ch == ')' || ch == ']' || ch == '}' || ch == ';' || ch == ',' || ch == '\0';
     }
+    // a unary op that needs to be force read as exactly 1 symbol
+    bool unary_op(u8 ch) {
+        return ch == '-' || ch == '!' || ch == '~';
+    }
 }

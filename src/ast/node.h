@@ -4,87 +4,12 @@
 #include "../core/vec.h"
 #include "../core/pair.h"
 
+#include "../lang/op.h"
+
 #include "../token/tokenizer.h"
 
 // IMPORTANT:
 // Any time you see `P<Token,Token>`, that's representing a `var_name: var_type` pair
-
-constexpr u8 UNARY_NUM = 3; // number of unary operators
-enum class OpType {
-    // Unary
-    Neg, // arithmetic
-    LogiNot, // logical
-    BitNot, // bitwise
-
-    // Biary
-    Add, Sub, Mul, Div, Mod, // arithmetic
-    LogiOr, LogiAnd, // logical
-    BitOr, BitAnd, BitXor, // bitwise
-
-    Assignment, // special; RIGHT ASSOCIATIVE
-};
-
-std::ostream& operator<<(std::ostream& os, OpType op) {
-    switch (op) {
-        case OpType::Neg:      return os << "-";
-        case OpType::LogiNot:  return os << "!";
-        case OpType::BitNot:   return os << "~";
-        case OpType::Add:      return os << "+";
-        case OpType::Sub:      return os << "-";
-        case OpType::Mul:      return os << "*";
-        case OpType::Div:      return os << "/";
-        case OpType::Mod:      return os << "%";
-        case OpType::LogiOr:   return os << "||";
-        case OpType::LogiAnd:  return os << "&&";
-        case OpType::BitOr:    return os << "|";
-        case OpType::BitAnd:   return os << "&";
-        case OpType::BitXor:   return os << "^";
-        case OpType::Assignment: return os << "=";
-    }
-    unreachable;
-}
-
-// high priority = apply first
-u8 p(OpType op) {
-    switch(op) {
-        case OpType::Neg:
-        case OpType::LogiNot:
-        case OpType::BitNot:
-            return 10;
-
-        case OpType::Mul:
-        case OpType::Div:
-        case OpType::Mod:
-            return 8;
-
-        case OpType::Add:
-        case OpType::Sub:
-            return 6;
-
-        case OpType::BitAnd:
-        case OpType::BitXor:
-        case OpType::BitOr:
-            return 4;
-
-        case OpType::LogiAnd:
-        case OpType::LogiOr:
-            return 2;
-
-        case OpType::Assignment:
-            return 0;
-    }
-    unreachable;
-}
-
-// return true if `left` has precedence over `right`
-// aka in expression `a left b right c` we apply `(a left b) right c`
-bool has_precedence(OpType left, OpType right) {
-    assert(u8(left) >= UNARY_NUM); //  there's no `a`
-    assert(u8(right) >= UNARY_NUM); //  there's no `(a left b)`
-
-    // TODO check for right associative ones
-    return p(left) >= p(right);
-}
 
 struct Node {
     Token token;
@@ -117,10 +42,10 @@ struct NodeConst : Node {
 // If `lhs` is nullptr, this is a unary operator
 // unary operators can be promoted to binary operators
 struct NodeOp : Node {
-    OpType op;
+    op::OpType op;
     Node* lhs; // nullable
     Node* rhs;
-    bool is_unary() { return u8(op) >= UNARY_NUM; }
+    bool is_unary() { return op::is_unary(op); }
     void codegen(Vec<u8>& gen) {}
     void debug_print() {
         std::cout << '(';

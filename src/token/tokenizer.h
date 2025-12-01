@@ -75,7 +75,7 @@ struct Tokenizer {
         return source.slice_range(start, at);
     }
 
-    // TODO incorrect; think about `!!1`
+    // TODO rework; this sucks
     // upon call, expected to have `source[at]` to be the first character of the operator
     // after being called, `source[at]` will be the character right after the operator
     Str parse_operator() {
@@ -86,14 +86,18 @@ struct Tokenizer {
             ch::delim(source[at]) ||
             this->is_at_comment()
         ));
+        // if a unary op that needs to be read as a single symbol (think `!!true`), return it
+        if(ch::unary_op(source[at])) { return source.slice(at++, 1); }
         usize start = at;
+        // not unary
         while(!(
             this->eof() ||
             ch::alphanum(source[at]) ||
             ch::white(source[at]) ||
             ch::bracket(source[at]) ||
             ch::delim(source[at]) ||
-            this->is_at_comment()
+            this->is_at_comment() ||
+            ch::unary_op(source[at]) // if reading a binop, stop reading when seeing a unary op
         )) { at++; }
         return source.slice_range(start, at);
     }
