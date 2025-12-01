@@ -83,9 +83,8 @@ struct NodeFnProto : Node {
     void codegen(Vec<u8>& gen) {}
     void debug_print() {
         std::cout << "fn (";
-        for(P<Token,Token> n : args) { std::cout << "(param " << n.a << " type " << n.b << ","; }
-        std::cout << ")->(";
-        std::cout << "(type " << ret_type << ")";
+        for(P<Token,Token> n : args) { std::cout << "param " << n.a.val << " type " << n.b.val << ","; }
+        std::cout << ")->(type " << ret_type.val << ")";
     }
 };
 

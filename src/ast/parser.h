@@ -170,7 +170,6 @@ struct Parser {
                 new (fn) NodeFnDef;
                 fn->token = token;
 
-                assert(t.peek_non_white() == '(');
                 fn->proto = this->build_fn_prototype(token);
                 assert(t.peek_non_white() == '{');
                 fn->body = this->next_node();
@@ -426,6 +425,7 @@ struct Parser {
         assert(proto->name.tt == TokenType::Identifier);
 
         Token next = t.next_token(); // consume `(`
+        assert(next.tt == TokenType::LeftParenthese);
         while(next.tt != TokenType::RightParenthese) {
             assert(next.tt == TokenType::Comma || next.tt == TokenType::LeftParenthese); // commas delimit arguments
             P<Token,Token> p;
