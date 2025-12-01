@@ -75,6 +75,7 @@ struct Tokenizer {
         return source.slice_range(start, at);
     }
 
+    // TODO incorrect; think about `!!1`
     // upon call, expected to have `source[at]` to be the first character of the operator
     // after being called, `source[at]` will be the character right after the operator
     Str parse_operator() {
