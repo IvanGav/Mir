@@ -79,20 +79,26 @@ struct NodeCall : Node {
 struct NodeFnProto : Node {
     Token name;
     Vec<P<Token,Token>> args;
-    P<Token,Token> ret;
+    Token ret_type;
     void codegen(Vec<u8>& gen) {}
     void debug_print() {
-        panic;
+        std::cout << "fn (";
+        for(P<Token,Token> n : args) { std::cout << "(param " << n.a << " type " << n.b << ","; }
+        std::cout << ")->(";
+        std::cout << "(type " << ret_type << ")";
     }
 };
 
-// `token` is undefined
+// `token` is "fn"
 struct NodeFnDef : Node {
     Node* proto;
     Node* body;
     void codegen(Vec<u8>& gen) {}
     void debug_print() {
-        panic;
+        std::cout << "function {" << std::endl;
+        proto->debug_print(); std::cout << std::endl;
+        body->debug_print(); std::cout << std::endl;
+        std::cout << "} function" << std::endl;
     }
 };
 
@@ -131,6 +137,19 @@ struct NodeIf : Node {
             std::cout << std::endl;
         }
         std::cout << "} ifblock" << std::endl;
+    }
+};
+
+struct NodeWhile : Node {
+    Node* condition;
+    Node* body;
+    void codegen(Vec<u8>& gen) {}
+    void debug_print() {
+        std::cout << "while ";
+        condition->debug_print();
+        std::cout << " {" << std::endl;
+        body->debug_print(); std::cout << std::endl;
+        std::cout << "} while" << std::endl;
     }
 };
 

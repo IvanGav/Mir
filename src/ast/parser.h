@@ -65,6 +65,7 @@ struct Parser {
                     NodeCall* call = node_arena->alloc<NodeCall>(1);
                     new (call) NodeCall;
                     call->token = token;
+                    call->args.arena = node_arena;
 
                     Token next = t.next_token(); // consume `(`
                     while(next.tt != TokenType::RightParenthese) {
@@ -130,8 +131,16 @@ struct Parser {
             }
 
             case TokenType::While: {
-                // TODO
-                panic;
+                NodeWhile* while_node = node_arena->alloc<NodeWhile>(1);
+                new (while_node) NodeWhile;
+                while_node->token = token;
+
+                assert(t.peek_non_white() == '(');
+                while_node->condition = this->next_node();
+                assert(t.peek_non_white() == '{');
+                while_node->body = this->next_node();
+
+                return while_node;
             }
 
             // TODO rework
@@ -155,9 +164,18 @@ struct Parser {
                 return var_decl;
             }
 
+            // TODO rework to support pure function declarations
             case TokenType::FunctionDecl: {
-                // TODO
-                panic;
+                NodeFnDef* fn = node_arena->alloc<NodeFnDef>(1);
+                new (fn) NodeFnDef;
+                fn->token = token;
+
+                assert(t.peek_non_white() == '(');
+                fn->proto = this->build_fn_prototype(token);
+                assert(t.peek_non_white() == '{');
+                fn->body = this->next_node();
+
+                return fn;
             }
 
             case TokenType::Return: {
@@ -327,9 +345,9 @@ struct Parser {
             // if unary operator, get its operand and apply
             // note that it is possible to have a fully applied op here (`next` has parsed `(1+1)`)
             // can be `!!!!true`, for all we know, so read unary until can't anymore
-            if(next->token.tt == TokenType::Special && dynamic_cast<NodeOp*>(next)->rhs == nullptr) {
+            {
                 Node* cur = next;
-                while(cur->token.tt == TokenType::Special) {
+                while(cur->token.tt == TokenType::Special && dynamic_cast<NodeOp*>(cur)->rhs == nullptr) {
                     Node* operand = this->next_term();
                     dynamic_cast<NodeOp*>(cur)->rhs = operand;
                     cur = operand; // go on to check whether the newly read node is a value or unary op
@@ -395,6 +413,34 @@ struct Parser {
             next = this->next_term();
         }
         unreachable;
+    }
+
+    // `fn` has been read, start reading the function prototype
+    Node* build_fn_prototype(Token fn_token) {
+        NodeFnProto* proto = node_arena->alloc<NodeFnProto>(1);
+        new (proto) NodeFnProto;
+        proto->token = fn_token;
+        proto->args.arena = node_arena;
+
+        proto->name = t.next_token();
+        assert(proto->name.tt == TokenType::Identifier);
+
+        Token next = t.next_token(); // consume `(`
+        while(next.tt != TokenType::RightParenthese) {
+            assert(next.tt == TokenType::Comma || next.tt == TokenType::LeftParenthese); // commas delimit arguments
+            P<Token,Token> p;
+            p.a = t.next_token();
+            assert(p.a.tt == TokenType::Identifier);
+            Token _colon = t.next_token();
+            assert(_colon.val == ":"_s);
+            p.b = t.next_type();
+            proto->args.push(p);
+            next = t.next_token(); // get `,` or `)`
+        }
+        Token _returning = t.next_token();
+        assert(_returning.val == ":"_s);
+        proto->ret_type = t.next_type();
+        return proto;
     }
 
     void read_semicol() {
