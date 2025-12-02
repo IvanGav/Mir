@@ -58,6 +58,8 @@ typedef double f64;
 #define min(a, b) a > b ? b : a
 #define max(a, b) a > b ? a : b
 
+#define printd(expr) std::cout << "--DEBUG " #expr ": " << (expr) << std::endl;
+
 usize next_power_of_two(usize n) {
     assert(sizeof(usize) == sizeof(unsigned long long));
     i32 leading_zeros = __builtin_clzll(n);
@@ -85,4 +87,26 @@ usize next_prime_size(usize n) {
     unreachable;
 }
 
-#define printd(expr) std::cout << "--DEBUG " #expr ": " << (expr) << std::endl;
+u8 sizeofival(i64 val) {
+    if(val >= I8_MIN && val <= I8_MAX) {
+        return sizeof(i8);
+    } else if(val >= I16_MIN && val <= I16_MAX) {
+        return sizeof(i16);
+    } else if(val >= I32_MIN && val <= I32_MAX) {
+        return sizeof(i32);
+    } else if(val >= I64_MIN && val <= I64_MAX) {
+        return sizeof(i64);
+    }
+}
+
+u8 sizeofuval(u64 val) {
+    if(val <= U8_MAX) {
+        return sizeof(u8);
+    } else if(val <= U16_MAX) {
+        return sizeof(u16);
+    } else if(val <= U32_MAX) {
+        return sizeof(u32);
+    } else if(val <= U64_MAX) {
+        return sizeof(u64);
+    }
+}

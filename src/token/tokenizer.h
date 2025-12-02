@@ -121,11 +121,6 @@ struct Tokenizer {
         // TODO expand to arrays later
         while(this->peek() == '*') { at++; base.size++; } // very unintended by the `Str`, but should be safe here
         return base;
-        // // TODO do more than just this
-        // Str t = source.slice(at, 3);
-        // at+=3;
-        // assert(t == "u64"_s || t == "Str"_s);
-        // return t;
     }
 
     Token next_bracket() {
