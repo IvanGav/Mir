@@ -48,8 +48,6 @@ struct Parser {
             }
 
             case TokenType::StringLiteral: {
-                // TODO
-                // panic;
                 NodeConst* n = node_arena->alloc<NodeConst>(1);
                 new (n) NodeConst;
                 n->token = token;

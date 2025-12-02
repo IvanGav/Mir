@@ -13,8 +13,6 @@
 
 struct Node {
     Token token;
-    // virtual void codegen(Vec<u8>& gen) {};
-    // virtual void debug_print() { std::cout << "I fucking despise OOP" << std::endl; };
     virtual void codegen(Vec<u8>& gen) = 0;
     virtual void debug_print() = 0;
 };
