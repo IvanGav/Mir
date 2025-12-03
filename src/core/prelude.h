@@ -13,6 +13,21 @@
 #include <bit>
 #include <type_traits>
 
+/* llvm */
+
+// #include "llvm/ADT/APInt.h"
+#include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Verifier.h"
+
 typedef int8_t i8;
 typedef uint8_t u8;
 typedef int16_t i16;
@@ -51,9 +66,9 @@ typedef double f64;
 #define KB *1024
 #define MB *1024*1024
 
-#define unreachable { assert(false); exit(1); }
+#define unreachable { assert(false); std::abort(); }
 
-#define panic { printf("BAD SYNTAX"); assert(false); exit(1); }
+#define panic { printf("BAD SYNTAX"); assert(false); std::abort(); }
 
 #define min(a, b) a > b ? b : a
 #define max(a, b) a > b ? a : b
@@ -97,6 +112,7 @@ u8 sizeofival(i64 val) {
     } else if(val >= I64_MIN && val <= I64_MAX) {
         return sizeof(i64);
     }
+    unreachable;
 }
 
 u8 sizeofuval(u64 val) {
@@ -109,4 +125,9 @@ u8 sizeofuval(u64 val) {
     } else if(val <= U64_MAX) {
         return sizeof(u64);
     }
+    unreachable;
 }
+
+#define impl_eq(concrete_type)  auto operator<=>(const concrete_type&) const = default; \
+                                auto operator==(const concrete_type& rhs) const { return (*this <=> rhs) == 0; } \
+                                auto operator!=(const concrete_type& rhs) const { return (*this <=> rhs) != 0; }

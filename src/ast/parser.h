@@ -7,6 +7,8 @@
 #include "../token/tokenizer.h"
 #include "../token/util.h"
 
+#include "../lang/type.h"
+
 #include "node.h"
 
 struct Parser {
@@ -38,7 +40,8 @@ struct Parser {
                 NodeConst* n = node_arena->alloc<NodeConst>(1);
                 new (n) NodeConst;
                 n->token = token;
-                n->val = str::to_int<u64>(token.val);
+                u64 int_val = str::to_int<u64>(token.val);
+                n->val = reinterpret_cast<Type*>(type::pool.ask_uint_const(int_val));
                 return n;
             }
 
@@ -51,7 +54,10 @@ struct Parser {
                 NodeConst* n = node_arena->alloc<NodeConst>(1);
                 new (n) NodeConst;
                 n->token = token;
-                n->val = 696969696;
+                n->val = reinterpret_cast<Type*>(type::pool.ask_str(TypeStr { 
+                    .self = Type { .tinfo = TypeI::Known, .ttype = TypeT::Str },
+                    .val = Str { .data = token.val.data+1, .size = token.val.size-2 } // we are guaranteed the token to be `"..."` where `...` is our desired string value
+                }));
                 return n;
             }
 

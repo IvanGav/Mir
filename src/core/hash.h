@@ -22,10 +22,14 @@ namespace hash {
     }
 
     template <typename T>
-    concept EnumClassConcept = std::is_enum_v<T> && !std::is_convertible_v<T, std::underlying_type_t<T>>;
-
+    concept EnumClassConcept = std::is_enum_v<T> && !std::is_convertible_v<T, std::underlying_type_t<T>>; // I have no idea either
     template <EnumClassConcept T>
     u64 from(T e) {
         return hash::from((usize) e);
+    }
+
+    template <typename T>
+    u64 from(T s) {
+        return s.hash();
     }
 }

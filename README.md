@@ -4,6 +4,13 @@ It's a low level-ish language. Still very much wip.
 
 I plan to use llvm for this project.
 
+# Compiling
+
+`make`
+
+> Try the following command to compile : clang++ -O3 -c $(llvm-config --cxxflags) source_file.cpp -o obj_code.
+> Then try linking with this command : clang++ obj_code $(llvm-config --ldflags --libs) -lpthread.
+
 # Notes for different systems
 
 In `core/hash.h`, the type `usize` is the same as `u64` on my machine... not sure if that's true in general.
