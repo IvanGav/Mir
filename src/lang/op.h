@@ -146,6 +146,21 @@ namespace op {
     bool is_unary(OpType op) {
         return u8(op) >= op::UNARY_NUM;
     }
+
+    bool is_logi(OpType op) {
+        switch(op) {
+            case OpType::LogiOr:
+            case OpType::LogiAnd:
+            case OpType::Eq:
+            case OpType::Less:
+            case OpType::Greater:
+            case OpType::LessEq:
+            case OpType::GreaterEq:
+                return true;
+            default:
+                return false;
+        }
+    }
 }
 
 std::ostream& operator<<(std::ostream& os, op::OpType op) {

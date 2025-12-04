@@ -17,8 +17,8 @@
 struct Node {
     Token token;
     virtual llvm::Value* codegen() = 0;
-    virtual void debug_print() = 0;
     virtual Type* compute_type() = 0;
+    virtual void debug_print() = 0;
 };
 
 /* specialized nodes */
@@ -54,6 +54,7 @@ struct NodeConst : Node {
         }
         panic;
     }
+    Type* compute_type() { return val; }
     void debug_print() {
         type::debug_print(val);
     }
@@ -66,14 +67,13 @@ struct NodeOp : Node {
     Node* lhs; // nullable
     Node* rhs;
     bool is_unary() { return op::is_unary(op); }
-
-    llvm::Value* codegen() {
+    llvm::Value* codegen_binary() {
         Type* lt = lhs->compute_type();
         Type* rt = rhs->compute_type();
         llvm::Value* lv = lhs->codegen();
         llvm::Value* rv = rhs->codegen();
-        if (!lv || !rv) return nullptr;
-        if(lt->ttype != rt->ttype) return nullptr;
+        if (!lv || !rv) panic;
+        if(lt->ttype != rt->ttype) panic;
         assert(lt->ttype == TypeT::UInt); // TODO temp
 
         // switch (op) {
@@ -97,10 +97,49 @@ struct NodeOp : Node {
             case op::OpType::Mul:
                 return llvm_builder->CreateMul(lv, rv, "multmp");
             case op::OpType::Less:
-                return llvm_builder->CreateICmpULT(lv, rv, "cmptmp");
-            default:
-                panic;
+                return llvm_builder->CreateICmpULT(lv, rv, "cmplttmp");
+            case op::OpType::Greater:
+                return llvm_builder->CreateICmpUGT(lv, rv, "cmpgttmp");
+            case op::OpType::LessEq:
+                return llvm_builder->CreateICmpULE(lv, rv, "cmpletmp");
+            case op::OpType::GreaterEq:
+                return llvm_builder->CreateICmpUGE(lv, rv, "cmpgetmp");
+            case op::OpType::Eq:
+                return llvm_builder->CreateICmpEQ(lv, rv, "cmpeqtmp");
         }
+        panic;
+    }
+    llvm::Value* codegen_unary() {
+        Type* rt = rhs->compute_type();
+        llvm::Value* rv = rhs->codegen();
+        if (!rv) panic;
+        assert(rt->ttype == TypeT::UInt); // TODO temp
+
+        switch (op) {
+            case op::OpType::Neg:
+                return llvm_builder->CreateNeg(rv, "negtmp");
+            case op::OpType::LogiNot:
+                panic;
+                return llvm_builder->CreateNot(rv, "loginottmp"); // TODO check
+            case op::OpType::BitNot:
+                panic;
+                return llvm_builder->CreateNot(rv, "bitnottmp"); // TODO check
+        }
+        panic;
+    }
+
+    llvm::Value* codegen() {
+        if(lhs == nullptr) {
+            return this->codegen_unary();
+        } else {
+            return this->codegen_binary();
+        }
+    }
+    Type* compute_type() {
+        if(op::is_logi(op)) return reinterpret_cast<Type*>(type::pool.ask_bool_any()); // TODO if both sides are const and same, return concrete
+        Type* lt = lhs->compute_type();
+        Type* rt = rhs->compute_type();
+        return type::meet(lt, rt);
     }
     void debug_print() {
         std::cout << '(';
@@ -113,7 +152,11 @@ struct NodeOp : Node {
 
 // Var name stored in the `token`
 struct NodeVar : Node {
-    llvm::Value* codegen() { panic; }
+    llvm::Value* codegen() {
+        if(!named_values.exists(token.val)) panic;
+        return named_values[token.val];
+    }
+    Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "(var " << token.val << ")";
     }
@@ -124,6 +167,7 @@ struct NodeCall : Node {
     Vec<Node*> args;
 
     llvm::Value* codegen() { panic; }
+    Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "(call " << token.val << ")->(";
         for(Node* n : args) { n->debug_print(); std::cout << ","; }
@@ -138,6 +182,7 @@ struct NodeFnProto : Node {
     Token ret_type;
 
     llvm::Value* codegen() { panic; }
+    Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "fn (";
         for(P<Token,Token> n : args) { std::cout << "param " << n.a.val << " type " << n.b.val << ","; }
@@ -151,6 +196,7 @@ struct NodeFnDef : Node {
     Node* body;
 
     llvm::Value* codegen() { panic; }
+    Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "function {" << std::endl;
         proto->debug_print(); std::cout << std::endl;
@@ -163,6 +209,7 @@ struct NodeBlock : Node {
     Vec<Node*> list;
 
     llvm::Value* codegen() { panic; }
+    Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "block {" << std::endl;
         for(Node* n : list) { n->debug_print(); std::cout << std::endl; }
@@ -179,6 +226,7 @@ struct NodeIf : Node {
     Node* else_clause; // nullable
 
     llvm::Value* codegen() { panic; }
+    Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "ifblock {" << std::endl;
         for(usize i = 0; i < body.size; i++) {
@@ -204,6 +252,7 @@ struct NodeWhile : Node {
     Node* body;
 
     llvm::Value* codegen() { panic; }
+    Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "while ";
         condition->debug_print();
@@ -220,6 +269,7 @@ struct NodeVarDecl : Node {
     Node* init; // nullable
 
     llvm::Value* codegen() { panic; }
+    Type* compute_type() { panic; }
     void debug_print() {
         assert(init != nullptr); // TODO
         std::cout << "vardecl " << name.val << " type " << declared_type.val << " = {" << std::endl;
@@ -232,6 +282,7 @@ struct NodeRet : Node {
     Node* val;
 
     llvm::Value* codegen() { panic; }
+    Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "return {" << std::endl;
         val->debug_print(); std::cout << std::endl;

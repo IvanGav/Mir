@@ -1,0 +1,7 @@
+# this will accumulate code as I implement more codegen to llvm ir
+
+1;
+
+1 + 2;
+
+2 * 125 + 256;

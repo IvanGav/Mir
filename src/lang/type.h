@@ -58,6 +58,7 @@ struct TypeInt {
 
     // return the size, in bytes, of this type
     u8 get_size_bytes() {
+        return 8; // TODO temporary
         switch(self.ttype) {
             case TypeT::Bool: return 1;
             case TypeT::UInt: {

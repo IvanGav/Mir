@@ -8,6 +8,8 @@
 #include "token/tokenizer.h"
 #include "token/debug.h"
 
+#include "llvm/static.h"
+
 #include "ast/node.h"
 #include "ast/parser.h"
 
@@ -17,6 +19,7 @@ Str readFile(const char* path, mem::Arena& arena = default_arena) {
 }
 
 int main(int argc, char* argv[]) {
+    init_llvm();
     mem::Arena node_arena = mem::Arena::create(1 MB);
     Str src;
     if(argc > 1)
@@ -34,5 +37,9 @@ int main(int argc, char* argv[]) {
         Node* expr = p.next_expr();
         if(expr == nullptr) break;
         expr->debug_print(); std::cout << "\n";
+        llvm::Value* ir = expr->codegen();
+        std::cout << "llvm ir: \n";
+        ir->print(llvm::outs());
+        std::cout << "\n\n";
     }
 }
