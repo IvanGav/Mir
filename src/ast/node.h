@@ -18,6 +18,7 @@ struct Node {
     Token token;
     virtual llvm::Value* codegen() = 0;
     virtual void debug_print() = 0;
+    virtual Type* compute_type() = 0;
 };
 
 /* specialized nodes */
@@ -29,12 +30,12 @@ struct NodeConst : Node {
         assert(type::is_const(val));
         switch(val->ttype) {
             case TypeT::Int: {
-                // TypeInt* ty = reinterpret_cast<TypeInt*>(val);
-                // return llvm::ConstantInt::get(*llvm_context, llvm::APInt(ty->get_size_bytes()*8, ty->val_min, true)); // TODO signed or negative?
+                TypeInt* ty = reinterpret_cast<TypeInt*>(val);
+                return llvm::ConstantInt::get(*llvm_context, llvm::APInt(ty->get_size_bytes()*8, ty->val_min, true)); // TODO signed or negative?
             }
             case TypeT::UInt: {
-                // TypeInt* ty = reinterpret_cast<TypeInt*>(val);
-                // return llvm::ConstantInt::get(*llvm_context, llvm::APInt(ty->get_size_bytes()*8, ty->val_min, false));
+                TypeInt* ty = reinterpret_cast<TypeInt*>(val);
+                return llvm::ConstantInt::get(*llvm_context, llvm::APInt(ty->get_size_bytes()*8, ty->val_min, false));
             }
             case TypeT::Bool: {
                 panic; // TODO
@@ -66,7 +67,41 @@ struct NodeOp : Node {
     Node* rhs;
     bool is_unary() { return op::is_unary(op); }
 
-    llvm::Value* codegen() { panic; }
+    llvm::Value* codegen() {
+        Type* lt = lhs->compute_type();
+        Type* rt = rhs->compute_type();
+        llvm::Value* lv = lhs->codegen();
+        llvm::Value* rv = rhs->codegen();
+        if (!lv || !rv) return nullptr;
+        if(lt->ttype != rt->ttype) return nullptr;
+        assert(lt->ttype == TypeT::UInt); // TODO temp
+
+        // switch (op) {
+        //     case op::OpType::Add:
+        //         return llvm_builder->CreateFAdd(lv, rv, "addtmp");
+        //     case op::OpType::Sub:
+        //         return llvm_builder->CreateFSub(lv, rv, "subtmp");
+        //     case op::OpType::Mul:
+        //         return llvm_builder->CreateFMul(lv, rv, "multmp");
+        //     case op::OpType::Less:
+        //         lv = llvm_builder->CreateFCmpULT(lv, rv, "cmptmp");
+        //         return llvm_builder->CreateUIToFP(lv, llvm::Type::getDoubleTy(*llvm_context), "booltmp");
+        //     default:
+        //         panic;
+        // }
+        switch (op) {
+            case op::OpType::Add:
+                return llvm_builder->CreateAdd(lv, rv, "addtmp");
+            case op::OpType::Sub:
+                return llvm_builder->CreateSub(lv, rv, "subtmp");
+            case op::OpType::Mul:
+                return llvm_builder->CreateMul(lv, rv, "multmp");
+            case op::OpType::Less:
+                return llvm_builder->CreateICmpULT(lv, rv, "cmptmp");
+            default:
+                panic;
+        }
+    }
     void debug_print() {
         std::cout << '(';
         if(lhs != nullptr) lhs->debug_print();

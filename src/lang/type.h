@@ -58,7 +58,32 @@ struct TypeInt {
 
     // return the size, in bytes, of this type
     u8 get_size_bytes() {
-        return 8; // TODO
+        switch(self.ttype) {
+            case TypeT::Bool: return 1;
+            case TypeT::UInt: {
+                if(val_max <= U8_MAX)
+                    return 1;
+                else if(val_max <= U16_MAX)
+                    return 2;
+                else if(val_max <= U32_MAX)
+                    return 4;
+                else if(val_max <= U64_MAX)
+                    return 8;
+                panic;
+            }
+            case TypeT::Int: {
+                if(i64(val_min) >= I8_MAX && i64(val_max) <= I8_MAX)
+                    return 1;
+                if(i64(val_min) >= I16_MAX && i64(val_max) <= I16_MAX)
+                    return 2;
+                if(i64(val_min) >= I32_MAX && i64(val_max) <= I32_MAX)
+                    return 4;
+                if(i64(val_min) >= I64_MAX && i64(val_max) <= I64_MAX)
+                    return 8;
+                panic;
+            }
+        }
+        unreachable;
     }
 
     impl_type_hash(TypeInt);
@@ -405,7 +430,64 @@ namespace type {
     Type* meet(Type* t1, Type* t2) {
         // meet of two unrelated types is always Pure:Bottom
         if(t1->ttype != t2->ttype) return pool.ask(Type { .tinfo = TypeI::Bottom, .ttype = TypeT::Pure });
-        panic;
+
+        // for all types, Top meet Something = Something
+        if(t1->tinfo == TypeI::Top) return t2;
+        if(t2->tinfo == TypeI::Top) return t1;
+        // for all types, Something meet Bottom = Bottom
+        if(t1->tinfo == TypeI::Bottom) return t1;
+        if(t2->tinfo == TypeI::Bottom) return t2;
+        
+        switch (t1->ttype) {
+            case TypeT::Pure: return t1;
+
+            case TypeT::Bool:
+            case TypeT::UInt:
+            case TypeT::Int: {
+                TypeInt* ti1 = reinterpret_cast<TypeInt*>(t1);
+                TypeInt* ti2 = reinterpret_cast<TypeInt*>(t2);
+                u64 min = max(ti1->val_min, ti2->val_min);
+                u64 max = min(ti1->val_max, ti2->val_max);
+                if(min > max)
+                    return reinterpret_cast<Type*>(pool.ask_int( TypeInt { .self = Type { .tinfo = TypeI::Bottom, .ttype = ti1->self.ttype } } ));
+                return reinterpret_cast<Type*>(pool.ask_int( TypeInt { .self = Type { .tinfo = TypeI::Known, .ttype = ti1->self.ttype }, .val_min = min, .val_max = max } ));
+            }
+
+            case TypeT::Float: {
+                TypeFloat* tf1 = reinterpret_cast<TypeFloat*>(t1);
+                TypeFloat* tf2 = reinterpret_cast<TypeFloat*>(t2);
+                f64 min = max(tf1->val_min, tf2->val_min);
+                f64 max = min(tf1->val_max, tf2->val_max);
+                if(min > max)
+                    return reinterpret_cast<Type*>(pool.ask_float( TypeFloat { .self = Type { .tinfo = TypeI::Bottom, .ttype = tf1->self.ttype } } ));
+                return reinterpret_cast<Type*>(pool.ask_float( TypeFloat { .self = Type { .tinfo = TypeI::Known, .ttype = tf1->self.ttype }, .val_min = min, .val_max = max } ));
+            }
+
+            case TypeT::Str: {
+                TypeStr* ts1 = reinterpret_cast<TypeStr*>(t1);
+                TypeStr* ts2 = reinterpret_cast<TypeStr*>(t2);
+                if(ts1->val != ts2->val)
+                    return reinterpret_cast<Type*>(pool.ask_str( TypeStr { .self = Type { .tinfo = TypeI::Bottom, .ttype = ts1->self.ttype } } ));
+                return reinterpret_cast<Type*>(ts1);
+            }
+
+            case TypeT::Tuple: {
+                panic;
+            }
+
+            case TypeT::Ptr: {
+                panic;
+            }
+
+            case TypeT::Array: {
+                panic;
+            }
+
+            case TypeT::Slice: {
+                panic;
+            }
+        }
+        unreachable;
     }
 
     // "Union"
