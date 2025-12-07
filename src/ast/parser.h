@@ -72,6 +72,7 @@ struct Parser {
                     call->args.arena = node_arena;
 
                     Token next = t.next_token(); // consume `(`
+                    if(t.peek_non_white() == ')') return call; // function takes no args
                     while(next.tt != TokenType::RightParenthese) {
                         assert(next.tt == TokenType::Comma || next.tt == TokenType::LeftParenthese); // commas delimit arguments
                         call->args.push(this->next_expr());
@@ -120,8 +121,7 @@ struct Parser {
                     }
 
                     // assume we have an else clause
-                    Token _else_token = t.next_token();
-                    assert(_else_token.tt == TokenType::Else);
+                    if(!this->read_token(TokenType::Else)) panic;
 
                     if(t.peek_non_white() == '{') {
                         if_node->else_clause = this->next_node();
@@ -129,8 +129,7 @@ struct Parser {
                     }
 
                     // assume we have an `else if` clause
-                    Token _if_token = t.next_token();
-                    assert(_if_token.tt == TokenType::If);
+                    if(!this->read_token(TokenType::If)) panic;
                 }
             }
 
@@ -155,13 +154,11 @@ struct Parser {
 
                 var_decl->name = t.next_token();
                 
-                Token _colon_token = t.next_token();
-                assert(_colon_token.val == ":"_s);
+                if(!this->read_token(":"_s)) panic;
                 
                 var_decl->declared_type = type::from_str(t.next_type().val);
 
-                Token _assignment_token = t.next_token();
-                assert(_assignment_token.val == "="_s);
+                if(!this->read_token("="_s)) panic;
 
                 var_decl->init = this->next_expr();
 
@@ -191,8 +188,7 @@ struct Parser {
 
             case TokenType::LeftParenthese: {
                 Node* expr = this->next_expr();
-                Token _right_parenthese = t.next_token();
-                assert(_right_parenthese.val == ")"_s);
+                if(!this->read_token(TokenType::RightParenthese)) panic;
                 return expr;
             }
 
@@ -212,10 +208,9 @@ struct Parser {
                 while(t.peek_non_white() != '}') {
                     Node* expr = this->next_expr();
                     block->list.push(expr);
-                    this->read_semicol(); // TODO what if `if (true) { 10 } else { 1 };`
+                    if(!this->read_token(TokenType::EndOfLine)) panic;
                 }
-                Token _end_brace = t.next_token(); // consume the trailing `}`
-                assert(_end_brace.tt == TokenType::RightCurly);
+                if(!this->read_token(TokenType::RightCurly)) panic; // consume the trailing `}`
                 return block;
             }
 
@@ -430,25 +425,40 @@ struct Parser {
 
         Token next = t.next_token(); // consume `(`
         assert(next.tt == TokenType::LeftParenthese);
-        while(next.tt != TokenType::RightParenthese) {
-            assert(next.tt == TokenType::Comma || next.tt == TokenType::LeftParenthese); // commas delimit arguments
-            P<Token,Token> p;
-            p.a = t.next_token();
-            assert(p.a.tt == TokenType::Identifier);
-            Token _colon = t.next_token();
-            assert(_colon.val == ":"_s);
-            p.b = t.next_type();
-            proto->args.push(p);
-            next = t.next_token(); // get `,` or `)`
+        // check if function takes args or not
+        if(t.peek_non_white() != ')') {
+            while(next.tt != TokenType::RightParenthese) {
+                assert(next.tt == TokenType::Comma || next.tt == TokenType::LeftParenthese); // commas delimit arguments
+                P<Token,Type*> p;
+                p.a = t.next_token();
+                assert(p.a.tt == TokenType::Identifier);
+                if(!this->read_token(":"_s)) panic;
+                p.b = type::from_str(t.next_type().val);
+                proto->args.push(p);
+                next = t.next_token(); // get `,` or `)`
+            }
+        } else {
+            if(!this->read_token(TokenType::RightParenthese)) panic;
         }
-        Token _returning = t.next_token();
-        assert(_returning.val == ":"_s);
-        proto->ret_type = t.next_type();
+        // check if function has a return type (if not - assign Pure:Bottom)
+        if(t.peek_non_white() == ':') {
+            if(!this->read_token(":"_s)) panic;
+            proto->ret_type = type::from_str(t.next_type().val);
+        } else {
+            proto->ret_type = type::pool.ask(Type {.tinfo=TypeI::Bottom, .ttype=TypeT::Pure});
+        }
         return proto;
     }
 
-    void read_semicol() {
-        Token _semicol = t.next_token();
-        assert(_semicol.tt == TokenType::EndOfLine);
+    // return true only if next token is of the expected type
+    bool read_token(TokenType tt) {
+        Token next_token = t.next_token();
+        assert(next_token.tt == tt);
+    }
+
+    // return true only if next token has the expected value (string)
+    bool read_token(Str val) {
+        Token next_token = t.next_token();
+        assert(next_token.val == val);
     }
 };

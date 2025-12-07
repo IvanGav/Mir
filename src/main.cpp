@@ -37,9 +37,9 @@ int main(int argc, char* argv[]) {
         Node* expr = p.next_expr();
         if(expr == nullptr) break;
         expr->debug_print(); std::cout << "\n";
-        llvm::Value* ir = expr->codegen();
-        std::cout << "llvm ir: \n";
-        ir->print(llvm::outs());
+        // llvm::Value* ir = expr->codegen();
+        // std::cout << "llvm ir: \n";
+        // ir->print(llvm::outs());
         std::cout << "\n\n";
     }
 }

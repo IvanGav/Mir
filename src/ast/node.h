@@ -195,8 +195,8 @@ struct NodeCall : Node {
 // `token` will be "fn"
 struct NodeFnProto : Node {
     Token name;
-    Vec<P<Token,Token>> args;
-    Token ret_type;
+    Vec<P<Token,Type*>> args;
+    Type* ret_type;
 
     llvm::Value* codegen() {
         // llvm::Type::getDoubleTy
@@ -216,8 +216,8 @@ struct NodeFnProto : Node {
     Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "fn (";
-        for(P<Token,Token> n : args) { std::cout << "param " << n.a.val << " type " << n.b.val << ","; }
-        std::cout << ")->(type " << ret_type.val << ")";
+        for(P<Token,Type*> n : args) { std::cout << "param " << n.a.val << ": "; type::debug_print(n.b); std::cout << ","; }
+        std::cout << ")->("; type::debug_print(ret_type); std::cout << ")";
     }
 };
 

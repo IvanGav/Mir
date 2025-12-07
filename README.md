@@ -4,12 +4,13 @@ It's a low level-ish language. Still very much wip.
 
 I plan to use llvm for this project.
 
+# TODO
+- rework ; reading and account for them in blocks
+
 # Compiling
 
-`make`
-
-> Try the following command to compile : clang++ -O3 -c $(llvm-config --cxxflags) source_file.cpp -o obj_code.
-> Then try linking with this command : clang++ obj_code $(llvm-config --ldflags --libs) -lpthread.
+`$ sudo apt install llvm-dev`
+`$ make`
 
 # Notes for different systems
 
