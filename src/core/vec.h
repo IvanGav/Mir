@@ -115,6 +115,10 @@ struct Vec {
         }
     }
 
+    void clear() {
+        size = 0;
+    }
+
     /* Slice compatibility */
 
     Slice<T> slice(usize start, usize size) {

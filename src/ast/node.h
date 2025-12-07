@@ -10,6 +10,7 @@
 #include "../token/tokenizer.h"
 
 #include "../llvm/static.h"
+#include <llvm/Support/type_traits.h>
 
 // IMPORTANT:
 // Any time you see `P<Token,Token>`, that's representing a `var_name: var_type` pair
@@ -181,7 +182,22 @@ struct NodeFnProto : Node {
     Vec<P<Token,Token>> args;
     Token ret_type;
 
-    llvm::Value* codegen() { panic; }
+    llvm::Value* codegen() {
+        // Function *PrototypeAST::codegen() {
+        // TODO change this to actual datatypes
+        // std::vector<llvm::Type*> doubles(args.size, llvm::Type::getDoubleTy(*llvm_context));
+        std::vector<llvm::Type*> type_arr(args.size, llvm::Type::getInt64Ty(*llvm_context));
+        llvm::FunctionType *ft = llvm::FunctionType::get(llvm::Type::getInt64Ty(*llvm_context), type_arr, false);
+
+        llvm::Function *fn = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, str::to_cppstr(name.val), llvm_module);
+
+        // Set names for all arguments.
+        u32 i = 0;
+        for (auto &arg : fn->args())
+            arg.setName(str::to_cppstr(args[i++].a.val));
+
+        return fn;
+    }
     Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "fn (";
@@ -195,7 +211,35 @@ struct NodeFnDef : Node {
     Node* proto;
     Node* body;
 
-    llvm::Value* codegen() { panic; }
+    llvm::Value* codegen() {
+        llvm::Function* fn = llvm_module->getFunction(str::to_cppstr(dynamic_cast<NodeFnProto*>(proto)->name.val));
+
+        if (!fn) fn = reinterpret_cast<llvm::Function*>(proto->codegen());
+        if (!fn) panic;
+        if (!fn->empty()) { printd("redefinition"); panic; }
+        
+        // Create a new basic block to start insertion into.
+        llvm::BasicBlock *bb = llvm::BasicBlock::Create(*llvm_context, "entry", fn);
+        llvm_builder->SetInsertPoint(bb);
+
+        // Record the function arguments in the NamedValues map.
+        named_values.clear();
+        // TODO specify arena
+        for (auto& arg : fn->args()) named_values[str::clone_cstr(std::string(arg.getName()).data())] = &arg;
+
+        if (llvm::Value* ret = body->codegen()) {
+            // Finish off the function.
+            llvm_builder->CreateRet(ret);
+
+            // Validate the generated code, checking for consistency.
+            llvm::verifyFunction(*fn);
+
+            return fn;
+        }
+        // Error reading body, remove function.
+        fn->eraseFromParent();
+        panic;
+    }
     Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "function {" << std::endl;

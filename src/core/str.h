@@ -101,6 +101,10 @@ namespace str {
         }
         return num;
     }
+
+    std::string to_cppstr(Str str) {
+        return std::string((const char*) str.data, str.size);
+    }
 };
 
 Str operator ""_s(const char* s, long unsigned int len) {

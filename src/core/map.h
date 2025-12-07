@@ -82,9 +82,27 @@ struct HMap {
         }
     }
 
+    void clear() {
+        for(Entry& e : map) {
+            e.flags = 0; // full reset
+        }
+    }
+
     /* Access Member Functions */
 
     V const& operator[](K key) const {
+        u64 hash = hash::from(key);
+        usize init_index = hash%capacity;
+        usize index = init_index;
+        // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
+        for(u32 attempts = 1; map[index].exists() && !(map[index].key == key); attempts++) {
+            index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
+        }
+        assert(map[index].exists());
+        return map[index].value;
+    }
+
+    V& operator[](K key) {
         u64 hash = hash::from(key);
         usize init_index = hash%capacity;
         usize index = init_index;
