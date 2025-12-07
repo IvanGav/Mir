@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
     if(argc > 1)
         src = readFile(argv[1]);
     else
-        src = readFile("mir/simple2.mir");
+        src = readFile("mir/llvm.mir");
 
     // Tokenizer t = Tokenizer::create(src);
     // while(!t.eof()) {

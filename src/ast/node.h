@@ -74,8 +74,10 @@ struct NodeOp : Node {
         llvm::Value* lv = lhs->codegen();
         llvm::Value* rv = rhs->codegen();
         if (!lv || !rv) panic;
-        if(lt->ttype != rt->ttype) panic;
-        assert(lt->ttype == TypeT::UInt); // TODO temp
+        // TODO remove pures
+        if(lt->ttype != TypeT::Pure && rt->ttype != TypeT::Pure && lt->ttype != rt->ttype) panic;
+        // TODO temp
+        assert(lt->ttype == TypeT::UInt || lt->ttype == TypeT::Pure);
 
         // switch (op) {
         //     case op::OpType::Add:
@@ -114,10 +116,12 @@ struct NodeOp : Node {
         Type* rt = rhs->compute_type();
         llvm::Value* rv = rhs->codegen();
         if (!rv) panic;
-        assert(rt->ttype == TypeT::UInt); // TODO temp
+        // TODO temp
+        assert(rt->ttype == TypeT::UInt || rt->ttype == TypeT::Pure);
 
         switch (op) {
             case op::OpType::Neg:
+                printd("negation");
                 return llvm_builder->CreateNeg(rv, "negtmp");
             case op::OpType::LogiNot:
                 panic;
@@ -136,8 +140,14 @@ struct NodeOp : Node {
             return this->codegen_binary();
         }
     }
+    // TODO incorrect but unfixable
+    // will have to serve as a primitive type checker
     Type* compute_type() {
         if(op::is_logi(op)) return reinterpret_cast<Type*>(type::pool.ask_bool_any()); // TODO if both sides are const and same, return concrete
+        // if unary
+        if(lhs == nullptr) {
+            return rhs->compute_type();
+        }
         Type* lt = lhs->compute_type();
         Type* rt = rhs->compute_type();
         return type::meet(lt, rt);
@@ -157,7 +167,11 @@ struct NodeVar : Node {
         if(!named_values.exists(token.val)) panic;
         return named_values[token.val];
     }
-    Type* compute_type() { panic; }
+    // TODO returns garbage "any" type
+    Type* compute_type() {
+        if(!named_values.exists(token.val)) panic;
+        return type::pool.ask( Type { .tinfo=TypeI::Top, .ttype=TypeT::Pure } );
+    }
     void debug_print() {
         std::cout << "(var " << token.val << ")";
     }
@@ -183,9 +197,8 @@ struct NodeFnProto : Node {
     Token ret_type;
 
     llvm::Value* codegen() {
-        // Function *PrototypeAST::codegen() {
-        // TODO change this to actual datatypes
-        // std::vector<llvm::Type*> doubles(args.size, llvm::Type::getDoubleTy(*llvm_context));
+        // llvm::Type::getDoubleTy
+        // TODO change this to actual datatypes; assuming all 64 bit integers
         std::vector<llvm::Type*> type_arr(args.size, llvm::Type::getInt64Ty(*llvm_context));
         llvm::FunctionType *ft = llvm::FunctionType::get(llvm::Type::getInt64Ty(*llvm_context), type_arr, false);
 
@@ -225,7 +238,7 @@ struct NodeFnDef : Node {
         // Record the function arguments in the NamedValues map.
         named_values.clear();
         // TODO specify arena
-        for (auto& arg : fn->args()) named_values[str::clone_cstr(std::string(arg.getName()).data())] = &arg;
+        for (auto& arg : fn->args()) named_values.add(str::clone_cstr(std::string(arg.getName()).data()), &arg);
 
         if (llvm::Value* ret = body->codegen()) {
             // Finish off the function.
@@ -233,6 +246,9 @@ struct NodeFnDef : Node {
 
             // Validate the generated code, checking for consistency.
             llvm::verifyFunction(*fn);
+
+            // Optimize the function.
+            llvm_FPM.run(*fn, llvm_FAM);
 
             return fn;
         }
@@ -252,7 +268,10 @@ struct NodeFnDef : Node {
 struct NodeBlock : Node {
     Vec<Node*> list;
 
-    llvm::Value* codegen() { panic; }
+    // TODO rework; this is temporary garbage
+    llvm::Value* codegen() {
+        return list[0]->codegen();
+    }
     Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "block {" << std::endl;
