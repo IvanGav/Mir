@@ -138,6 +138,6 @@ u8 sizeofuval(u64 val) {
     unreachable;
 }
 
-#define impl_eq(concrete_type)  auto operator<=>(const concrete_type&) const = default; \
+//#define impl_eq(concrete_type)  auto operator<=>(const concrete_type&) const = default; \
                                 auto operator==(const concrete_type& rhs) const { return (*this <=> rhs) == 0; } \
                                 auto operator!=(const concrete_type& rhs) const { return (*this <=> rhs) != 0; }

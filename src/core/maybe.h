@@ -18,4 +18,14 @@ struct Maybe {
     static Maybe some(T&& val) {
         return Maybe<T> { .val = val, .here = true };
     }
+    static Maybe some(T& val) {
+        return Maybe<T> { .val = val, .here = true };
+    }
+
+    int operator==(const Maybe<T>& rhs) const {
+        if(here == rhs.here) {
+            return val == rhs.val;
+        }
+        return false;
+    }
 };

@@ -4,6 +4,7 @@
 #include "slice.h"
 
 #define hash_int(type) u64 from(type int_t) { return (u64) int_t; }
+#define hash_float(type) u64 from(type float_t) { return std::bit_cast<u64>((f64)float_t); }
 
 namespace hash {
     hash_int(u8); hash_int(i8);
@@ -11,6 +12,7 @@ namespace hash {
     hash_int(u32); hash_int(i32);
     hash_int(u64); hash_int(i64);
     // hash_int(usize); // apparently same as u64 on my machine...
+    hash_float(f32); hash_float(f64);
     
     template <typename T>
     u64 from(Slice<T> s) {

@@ -158,7 +158,7 @@ struct Parser {
                 Token _colon_token = t.next_token();
                 assert(_colon_token.val == ":"_s);
                 
-                var_decl->declared_type = t.next_type();
+                var_decl->declared_type = type::from_str(t.next_type().val);
 
                 Token _assignment_token = t.next_token();
                 assert(_assignment_token.val == "="_s);

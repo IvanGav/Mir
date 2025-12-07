@@ -32,11 +32,13 @@ struct NodeConst : Node {
         switch(val->ttype) {
             case TypeT::Int: {
                 TypeInt* ty = reinterpret_cast<TypeInt*>(val);
-                return llvm::ConstantInt::get(*llvm_context, llvm::APInt(ty->get_size_bytes()*8, ty->val_min, true)); // TODO signed or negative?
+                assert(ty->val.here);
+                return llvm::ConstantInt::get(*llvm_context, llvm::APInt(ty->get_size_bytes()*8, ty->val.val, true)); // TODO signed or negative?
             }
             case TypeT::UInt: {
                 TypeInt* ty = reinterpret_cast<TypeInt*>(val);
-                return llvm::ConstantInt::get(*llvm_context, llvm::APInt(ty->get_size_bytes()*8, ty->val_min, false));
+                assert(ty->val.here);
+                return llvm::ConstantInt::get(*llvm_context, llvm::APInt(ty->get_size_bytes()*8, ty->val.val, false));
             }
             case TypeT::Bool: {
                 panic; // TODO
@@ -45,7 +47,8 @@ struct NodeConst : Node {
             }
             case TypeT::Float: {
                 TypeFloat* ty = reinterpret_cast<TypeFloat*>(val);
-                return llvm::ConstantFP::get(*llvm_context, llvm::APFloat(ty->val_min));
+                assert(ty->val.here);
+                return llvm::ConstantFP::get(*llvm_context, llvm::APFloat(ty->val.val));
             }
             case TypeT::Str: {
                 TypeStr* ty = reinterpret_cast<TypeStr*>(val);
@@ -140,8 +143,7 @@ struct NodeOp : Node {
             return this->codegen_binary();
         }
     }
-    // TODO incorrect but unfixable
-    // will have to serve as a primitive type checker
+    // a primitive type checker
     Type* compute_type() {
         if(op::is_logi(op)) return reinterpret_cast<Type*>(type::pool.ask_bool_any()); // TODO if both sides are const and same, return concrete
         // if unary
@@ -328,14 +330,16 @@ struct NodeWhile : Node {
 // `token` will be "let"
 struct NodeVarDecl : Node {
     Token name;
-    Token declared_type; // TODO
+    Type* declared_type;
     Node* init; // nullable
 
     llvm::Value* codegen() { panic; }
     Type* compute_type() { panic; }
     void debug_print() {
         assert(init != nullptr); // TODO
-        std::cout << "vardecl " << name.val << " type " << declared_type.val << " = {" << std::endl;
+        std::cout << "vardecl " << name.val << " type ";
+        type::debug_print(declared_type);
+        std::cout << " = {" << std::endl;
         init->debug_print(); std::cout << std::endl;
         std::cout << "} vardecl" << std::endl;
     }

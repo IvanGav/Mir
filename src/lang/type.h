@@ -5,15 +5,9 @@
 #include "../core/slice.h"
 #include "../core/set.h"
 #include "../core/str.h"
+#include "../core/maybe.h"
 
 #include "../llvm/static.h"
-
-#define impl_type_hash(concrete_type) u64 hash(){return type::hash(reinterpret_cast<Type*>(this));}
-
-struct Type;
-namespace type {
-    u64 hash(Type* t);
-};
 
 // type information level
 enum class TypeI {
@@ -44,60 +38,43 @@ struct Type {
     TypeI tinfo;
     TypeT ttype; // basically a tag for what (sub)class it is (with a little bit extra semantics, such as `Bool` and `Int` being different)
     
-    impl_type_hash(Type);
-    impl_eq(Type);
+    u64 hash() { return hash::from(tinfo) ^ (hash::from(ttype) << 2); }
+    int operator==(const Type& rhs) const { return tinfo == rhs.tinfo && ttype == rhs.ttype; }
 };
 
 /* Specific types */
 
 struct TypeInt {
-    // TODO look at "known bits"
     Type self;
-    u64 val_min;
-    u64 val_max;
+
+    u8 bytes;
+    Maybe<u64> val;
 
     // return the size, in bytes, of this type
     u8 get_size_bytes() {
-        return 8; // TODO temporary
-        switch(self.ttype) {
-            case TypeT::Bool: return 1;
-            case TypeT::UInt: {
-                if(val_max <= U8_MAX)
-                    return 1;
-                else if(val_max <= U16_MAX)
-                    return 2;
-                else if(val_max <= U32_MAX)
-                    return 4;
-                else if(val_max <= U64_MAX)
-                    return 8;
-                panic;
-            }
-            case TypeT::Int: {
-                if(i64(val_min) >= I8_MAX && i64(val_max) <= I8_MAX)
-                    return 1;
-                if(i64(val_min) >= I16_MAX && i64(val_max) <= I16_MAX)
-                    return 2;
-                if(i64(val_min) >= I32_MAX && i64(val_max) <= I32_MAX)
-                    return 4;
-                if(i64(val_min) >= I64_MAX && i64(val_max) <= I64_MAX)
-                    return 8;
-                panic;
-            }
-        }
-        unreachable;
+        return bytes;
     }
 
-    impl_type_hash(TypeInt);
-    impl_eq(TypeInt);
+    u64 hash() { u64 newval = self.hash() ^ ((val.here ? hash::from(val.val) : 1) << bytes); if(self.ttype == TypeT::Int) { return ~newval; } else { return newval; } }
+    int operator==(const TypeInt& rhs) const { return self == rhs.self && bytes == rhs.bytes && val == rhs.val; }
 };
 
 struct TypeFloat {
     Type self;
-    f64 val_min;
-    f64 val_max;
+    
+    u8 bytes;
+    Maybe<f64> val;
 
-    impl_type_hash(TypeFloat);
-    impl_eq(TypeFloat);
+    u64 hash() { u64 newval = self.hash() ^ ((val.here ? hash::from(val.val) : 1) << bytes); return newval; }
+    int operator==(const TypeFloat& rhs) const { return self == rhs.self && bytes == rhs.bytes && val == rhs.val; }
+};
+
+struct TypeStr {
+    Type self;
+    Str val;
+
+    u64 hash() { return self.hash() ^ (hash::from(val)); }
+    int operator==(const TypeStr& rhs) const { return self == rhs.self && val == rhs.val; }
 };
 
 struct TypeTuple {
@@ -122,14 +99,6 @@ struct TypeSlice {
     // u64 size; // TODO ???
 };
 
-struct TypeStr {
-    Type self;
-    Str val;
-
-    impl_type_hash(TypeStr);
-    auto operator==(const TypeStr& rhs) const { return (self == rhs.self && val == rhs.val); }
-};
-
 /* Type Pool */
 
 // You "ask" for a Type
@@ -148,40 +117,26 @@ struct TypePool {
     
     // bool
     TypeInt* ask_bool_any() {
-        return this->ask_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Bool}, .val_min = 0, .val_max = 1 });
+        return this->ask_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Bool}, .bytes=1, .val=Maybe<u64>::none() });
     }
     TypeInt* ask_bool_const(bool val) {
-        return this->ask_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Bool}, .val_min = (u64) val, .val_max = (u64) val });
+        return this->ask_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Bool}, .bytes=1, .val=Maybe<u64>::some((u64)val) });
     }
     // unsigned int
     TypeInt* ask_uint_sized(u8 bytes) {
-        u64 max;
-        switch(bytes) {
-            case 1: max = U8_MAX; break;
-            case 2: max = U16_MAX; break;
-            case 4: max = U32_MAX; break;
-            case 8: max = U64_MAX; break;
-            default: panic;
-        }
-        return this->ask_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::UInt}, .val_min = 0, .val_max = max });
+        return this->ask_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::UInt}, .bytes=bytes, .val=Maybe<u64>::none() });
     }
     TypeInt* ask_uint_const(u64 val) {
-        return this->ask_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::UInt}, .val_min = val, .val_max = val });
+        // TODO hardcoded to 8 bytes
+        return this->ask_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::UInt}, .bytes=8, .val=Maybe<u64>::some(val) });
     }
     // signed int
     TypeInt* ask_int_sized(u8 bytes) {
-        i64 max, min;
-        switch(bytes) {
-            case 1: max = I8_MAX; min = I8_MIN; break;
-            case 2: max = I16_MAX; min = I16_MIN; break;
-            case 4: max = I32_MAX; min = I32_MIN; break;
-            case 8: max = I64_MAX; min = I64_MIN; break;
-            default: panic;
-        }
-        return this->ask_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .val_min = std::bit_cast<u64>(min), .val_max = std::bit_cast<u64>(max)});
+        return this->ask_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .bytes=bytes, .val=Maybe<u64>::none() });
     }
-    TypeInt* ask_int_const(i64 val) {
-        return this->ask_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .val_min = std::bit_cast<u64>(val), .val_max = std::bit_cast<u64>(val) });
+    TypeInt* ask_int_const(u64 val) {
+        // TODO hardcoded to 8 bytes
+        return this->ask_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .bytes=8, .val=Maybe<u64>::some(val) });
     }
     // other int
     TypeInt* ask_int(TypeInt t) {
@@ -190,6 +145,13 @@ struct TypePool {
     }
 
     // float
+    TypeFloat* ask_float_sized(u8 bytes) {
+        return this->ask_float(TypeFloat { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Float}, .bytes=bytes, .val=Maybe<f64>::none() });
+    }
+    TypeFloat* ask_int_const(f64 val) {
+        // TODO hardcoded to 8 bytes
+        return this->ask_float(TypeFloat { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Float}, .bytes=8, .val=Maybe<f64>::some(val) });
+    }
     TypeFloat* ask_float(TypeFloat t) {
         s_type_float.add(t);
         return s_type_float.get(t);
@@ -239,60 +201,22 @@ std::ostream& operator<<(std::ostream& os, TypeT tt) {
 namespace type {
     static TypePool pool;
 
-    // hash of every type
-    u64 hash(Type* t) {
-        switch (t->ttype) {
-            case TypeT::Pure: {
-                Type* ty = static_cast<Type*>(t);
-                return hash::from(ty->tinfo) ^ (hash::from(ty->ttype) << 2);
-            }
+    Type* from_str(Str name) {
+        if(name == "u8"_s) return reinterpret_cast<Type*>(type::pool.ask_uint_sized(1));
+        if(name == "i8"_s) return reinterpret_cast<Type*>(type::pool.ask_int_sized(1));
+        if(name == "u16"_s) return reinterpret_cast<Type*>(type::pool.ask_uint_sized(2));
+        if(name == "i16"_s) return reinterpret_cast<Type*>(type::pool.ask_int_sized(2));
+        if(name == "u32"_s) return reinterpret_cast<Type*>(type::pool.ask_uint_sized(4));
+        if(name == "i32"_s) return reinterpret_cast<Type*>(type::pool.ask_int_sized(4));
+        if(name == "u64"_s) return reinterpret_cast<Type*>(type::pool.ask_uint_sized(8));
+        if(name == "i64"_s) return reinterpret_cast<Type*>(type::pool.ask_int_sized(8));
+        
+        if(name == "f32"_s) return reinterpret_cast<Type*>(type::pool.ask_float_sized(4));
+        if(name == "f64"_s) return reinterpret_cast<Type*>(type::pool.ask_float_sized(8));
 
-            case TypeT::Bool:
-            case TypeT::UInt:
-            case TypeT::Int: {
-                TypeInt* ty = reinterpret_cast<TypeInt*>(t);
-                u64 val = hash::from(ty->self.tinfo) ^ (hash::from(ty->self.ttype) << 2) ^ 
-                    (hash::from(ty->val_max) ^ (hash::from(ty->val_max - ty->val_min) << 4));
-                if(ty->self.ttype == TypeT::Int) return ~val;
-                return val;
-            }
-
-            case TypeT::Float: {
-                TypeFloat* ty = reinterpret_cast<TypeFloat*>(t);
-                u64 val_min_cast = std::bit_cast<u64>(ty->val_min);
-                u64 val_max_cast = std::bit_cast<u64>(ty->val_max);
-                return hash::from(ty->self.tinfo) ^ (hash::from(ty->self.ttype) << 2) ^ 
-                    (hash::from(val_max_cast) ^ (hash::from(val_max_cast - val_min_cast)));
-            }
-
-            case TypeT::Str: {
-                TypeStr* ty = reinterpret_cast<TypeStr*>(t);
-                return hash::from(ty->self.tinfo) ^ (hash::from(ty->self.ttype) << 2) ^ 
-                    (hash::from(ty->val));
-            }
-
-            case TypeT::Tuple: {
-                TypeTuple* ty = reinterpret_cast<TypeTuple*>(t);
-                panic;
-            }
-
-            case TypeT::Ptr: {
-                TypePtr* ty = reinterpret_cast<TypePtr*>(t);
-                panic;
-            }
-
-            case TypeT::Array: {
-                TypeArray* ty = reinterpret_cast<TypeArray*>(t);
-                panic;
-            }
-
-            case TypeT::Slice: {
-                TypeSlice* ty = reinterpret_cast<TypeSlice*>(t);
-                panic;
-            }
-        }
-
-        unreachable;
+        if(name == "bool"_s) return reinterpret_cast<Type*>(type::pool.ask_bool_any());
+        if(name == "Str"_s) return reinterpret_cast<Type*>(type::pool.ask_str(TypeStr {.self=Type {.tinfo=TypeI::Top, .ttype=TypeT::Str}}));
+        panic;
     }
 
     void debug_print(Type* t) {
@@ -308,12 +232,12 @@ namespace type {
                     std::cout << "<Bool:Top>";
                 else if(ty->self.tinfo == TypeI::Bottom) 
                     std::cout << "<Bool:Bottom>";
-                else if(ty->val_min == 0 && ty->val_max == 0)
+                else if(ty->val.here && ty->val.val == 0)
                     std::cout << "false";
-                else if(ty->val_min == 1 && ty->val_max == 1)
+                else if(ty->val.here && ty->val.val == 1)
                     std::cout << "true";
-                else if(ty->val_min == 1 && ty->val_max == 1)
-                    std::cout << "<Bool:[false..true]>";
+                else
+                    std::cout << "<Bool:any>";
                 return;
             }
             case TypeT::UInt: {
@@ -322,16 +246,22 @@ namespace type {
                     std::cout << "<UInt:Top>";
                 else if(ty->self.tinfo == TypeI::Bottom) 
                     std::cout << "<UInt:Bottom>";
-                else if(ty->val_min == ty->val_max)
-                    std::cout << ty->val_min;
+                else if(ty->val.here)
+                    std::cout << ty->val.val << "u";
                 else
-                    std::cout << "<UInt:[" << ty->val_min << ".." << ty->val_max << "]>";
-                // TODO expand to display u8, u16, u32, u64
+                    std::cout << "<UInt:" << (u64) ty->bytes << " bytes>";
                 return;
             }
             case TypeT::Int: {
                 TypeInt* ty = reinterpret_cast<TypeInt*>(t);
-                panic; // TODO
+                if(ty->self.tinfo == TypeI::Top) 
+                    std::cout << "<Int:Top>";
+                else if(ty->self.tinfo == TypeI::Bottom) 
+                    std::cout << "<Int:Bottom>";
+                else if(ty->val.here)
+                    std::cout << std::bit_cast<i64>(ty->val.val);
+                else
+                    std::cout << "<Int:" << (u64) ty->bytes << " bytes>";
                 return;
             }
 
@@ -341,10 +271,10 @@ namespace type {
                     std::cout << "<Float:Top>";
                 else if(ty->self.tinfo == TypeI::Bottom) 
                     std::cout << "<Float:Bottom>";
-                else if(ty->val_min == ty->val_max)
-                    std::cout << ty->val_min;
+                else if(ty->val.here)
+                    std::cout << ty->val.val;
                 else
-                    std::cout << "<Float:[" << ty->val_min << ".." << ty->val_max << "]>";
+                    std::cout << "<Float:" << (u64) ty->bytes << " bytes>";
                 return;
             }
 
@@ -391,12 +321,12 @@ namespace type {
             case TypeT::UInt:
             case TypeT::Int: {
                 TypeInt* ty = reinterpret_cast<TypeInt*>(t);
-                return ty->self.tinfo == TypeI::Known && ty->val_max == ty->val_min;
+                return ty->self.tinfo == TypeI::Known && ty->val.here;
             }
 
             case TypeT::Float: {
                 TypeFloat* ty = reinterpret_cast<TypeFloat*>(t);
-                return ty->self.tinfo == TypeI::Known && ty->val_max == ty->val_min;
+                return ty->self.tinfo == TypeI::Known && ty->val.here;
             }
 
             case TypeT::Str: {
@@ -427,72 +357,8 @@ namespace type {
         unreachable;
     }
 
-    // "Intersection"
     Type* meet(Type* t1, Type* t2) {
-        // meet of two unrelated types is always Pure:Bottom
-        if(t1->ttype != t2->ttype) return pool.ask(Type { .tinfo = TypeI::Bottom, .ttype = TypeT::Pure });
-
-        // for all types, Top meet Something = Something
-        if(t1->tinfo == TypeI::Top) return t2;
-        if(t2->tinfo == TypeI::Top) return t1;
-        // for all types, Something meet Bottom = Bottom
-        if(t1->tinfo == TypeI::Bottom) return t1;
-        if(t2->tinfo == TypeI::Bottom) return t2;
-        
-        switch (t1->ttype) {
-            case TypeT::Pure: return t1;
-
-            case TypeT::Bool:
-            case TypeT::UInt:
-            case TypeT::Int: {
-                TypeInt* ti1 = reinterpret_cast<TypeInt*>(t1);
-                TypeInt* ti2 = reinterpret_cast<TypeInt*>(t2);
-                u64 min = max(ti1->val_min, ti2->val_min);
-                u64 max = min(ti1->val_max, ti2->val_max);
-                if(min > max)
-                    return reinterpret_cast<Type*>(pool.ask_int( TypeInt { .self = Type { .tinfo = TypeI::Bottom, .ttype = ti1->self.ttype } } ));
-                return reinterpret_cast<Type*>(pool.ask_int( TypeInt { .self = Type { .tinfo = TypeI::Known, .ttype = ti1->self.ttype }, .val_min = min, .val_max = max } ));
-            }
-
-            case TypeT::Float: {
-                TypeFloat* tf1 = reinterpret_cast<TypeFloat*>(t1);
-                TypeFloat* tf2 = reinterpret_cast<TypeFloat*>(t2);
-                f64 min = max(tf1->val_min, tf2->val_min);
-                f64 max = min(tf1->val_max, tf2->val_max);
-                if(min > max)
-                    return reinterpret_cast<Type*>(pool.ask_float( TypeFloat { .self = Type { .tinfo = TypeI::Bottom, .ttype = tf1->self.ttype } } ));
-                return reinterpret_cast<Type*>(pool.ask_float( TypeFloat { .self = Type { .tinfo = TypeI::Known, .ttype = tf1->self.ttype }, .val_min = min, .val_max = max } ));
-            }
-
-            case TypeT::Str: {
-                TypeStr* ts1 = reinterpret_cast<TypeStr*>(t1);
-                TypeStr* ts2 = reinterpret_cast<TypeStr*>(t2);
-                if(ts1->val != ts2->val)
-                    return reinterpret_cast<Type*>(pool.ask_str( TypeStr { .self = Type { .tinfo = TypeI::Bottom, .ttype = ts1->self.ttype } } ));
-                return reinterpret_cast<Type*>(ts1);
-            }
-
-            case TypeT::Tuple: {
-                panic;
-            }
-
-            case TypeT::Ptr: {
-                panic;
-            }
-
-            case TypeT::Array: {
-                panic;
-            }
-
-            case TypeT::Slice: {
-                panic;
-            }
-        }
-        unreachable;
-    }
-
-    // "Union"
-    Type* join(Type* t1, Type* t2) {
-        panic;
+        if(*t1 == *t2) return t1;
+        return type::pool.ask( Type {.tinfo=TypeI::Bottom, .ttype=TypeT::Pure} );
     }
 }
