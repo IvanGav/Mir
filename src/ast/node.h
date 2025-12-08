@@ -80,7 +80,7 @@ struct NodeOp : Node {
         // TODO remove pures
         if(lt->ttype != TypeT::Pure && rt->ttype != TypeT::Pure && lt->ttype != rt->ttype) panic;
         // TODO temp
-        assert(lt->ttype == TypeT::UInt || lt->ttype == TypeT::Pure);
+        // assert(lt->ttype == TypeT::UInt || lt->ttype == TypeT::Pure);
 
         // switch (op) {
         //     case op::OpType::Add:
@@ -120,11 +120,10 @@ struct NodeOp : Node {
         llvm::Value* rv = rhs->codegen();
         if (!rv) panic;
         // TODO temp
-        assert(rt->ttype == TypeT::UInt || rt->ttype == TypeT::Pure);
+        // assert(rt->ttype == TypeT::UInt || rt->ttype == TypeT::Pure);
 
         switch (op) {
             case op::OpType::Neg:
-                printd("negation");
                 return llvm_builder->CreateNeg(rv, "negtmp");
             case op::OpType::LogiNot:
                 panic;
@@ -250,7 +249,9 @@ struct NodeFnDef : Node {
             llvm::verifyFunction(*fn);
 
             // Optimize the function.
+            #ifdef LLVM_OPTIMIZE
             llvm_FPM.run(*fn, llvm_FAM);
+            #endif
 
             return fn;
         }
@@ -290,7 +291,53 @@ struct NodeIf : Node {
     Vec<Node*> body;
     Node* else_clause; // nullable
 
-    llvm::Value* codegen() { panic; }
+    llvm::Value* codegen() {
+        assert(condition.size == 1); // TODO temporary
+        assert(else_clause != nullptr); // TODO temporary
+        llvm::Value* cv = condition[0]->codegen();
+        if (!cv) panic;
+
+        llvm::Function* fn = llvm_builder->GetInsertBlock()->getParent();
+
+        // Create blocks for the then and else cases.  Insert the 'then' block at the
+        // end of the function.
+        llvm::BasicBlock* then_bb = llvm::BasicBlock::Create(*llvm_context, "then", fn);
+        llvm::BasicBlock* else_bb = llvm::BasicBlock::Create(*llvm_context, "else");
+        llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(*llvm_context, "ifcont");
+
+        llvm_builder->CreateCondBr(cv, then_bb, else_bb);
+
+        // Emit then value.
+        llvm_builder->SetInsertPoint(then_bb);
+
+        llvm::Value* then_val = body[0]->codegen();
+        if (!then_val) return nullptr;
+
+        llvm_builder->CreateBr(merge_bb);
+        // Codegen of 'Then' can change the current block, update ThenBB for the PHI.
+        then_bb = llvm_builder->GetInsertBlock();
+
+        // Emit else block.
+        fn->insert(fn->end(), else_bb);
+        llvm_builder->SetInsertPoint(else_bb);
+
+        llvm::Value* else_val = else_clause->codegen();
+        if (!else_val) return nullptr;
+
+        llvm_builder->CreateBr(merge_bb);
+        // codegen of 'Else' can change the current block, update ElseBB for the PHI.
+        else_bb = llvm_builder->GetInsertBlock();
+
+        // Emit merge block.
+        fn->insert(fn->end(), merge_bb);
+        llvm_builder->SetInsertPoint(merge_bb);
+        // llvm::PHINode* phi = llvm_builder->CreatePHI(llvm::Type::getDoubleTy(*llvm_context), 2, "iftmp");
+        llvm::PHINode* phi = llvm_builder->CreatePHI(llvm::Type::getInt64Ty(*llvm_context), 2, "iftmp"); // TODO VERY HARDCODED NOT GOOD
+
+        phi->addIncoming(then_val, then_bb);
+        phi->addIncoming(else_val, else_bb);
+        return phi;
+    }
     Type* compute_type() { panic; }
     void debug_print() {
         std::cout << "ifblock {" << std::endl;

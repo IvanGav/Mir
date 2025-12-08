@@ -41,7 +41,7 @@ struct Parser {
                 new (n) NodeConst;
                 n->token = token;
                 u64 int_val = str::to_int<u64>(token.val);
-                n->val = reinterpret_cast<Type*>(type::pool.ask_uint_const(int_val));
+                n->val = reinterpret_cast<Type*>(type::pool.ask_int_const(int_val));
                 return n;
             }
 
@@ -453,12 +453,12 @@ struct Parser {
     // return true only if next token is of the expected type
     bool read_token(TokenType tt) {
         Token next_token = t.next_token();
-        assert(next_token.tt == tt);
+        return next_token.tt == tt;
     }
 
     // return true only if next token has the expected value (string)
     bool read_token(Str val) {
         Token next_token = t.next_token();
-        assert(next_token.val == val);
+        return next_token.val == val;
     }
 };
