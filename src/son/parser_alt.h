@@ -46,7 +46,7 @@ struct Parser {
             case TokenType::IntLiteral: {
                 return node::peephole((Node*)
                     NodeConst::from_token((Type*) type::pool.int_const(str::to_int<u64>(token.val)), token)
-                    .create(START_NODE)
+                    .create(SCOPE_NODE->ctrl())
                 );
             }
 
@@ -141,7 +141,7 @@ struct Parser {
                 if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
                 return node::peephole((Node*)
                     NodeRet::from_token(token)
-                    .create(START_NODE, ret_expr)
+                    .create(SCOPE_NODE->ctrl(), ret_expr)
                 );
             }
             
@@ -265,7 +265,7 @@ struct Parser {
         SCOPE_NODE->pop();
         return node::peephole((Node*) 
             NodeConst::generated((Type*) type::pool.bottom())
-            .create(START_NODE)
+            .create(SCOPE_NODE->ctrl())
         );
     }
 
