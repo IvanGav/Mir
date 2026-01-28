@@ -1,0 +1,13 @@
+# a test code that will accumulate features as I implement them
+
+let a: i64 = 1;
+let b: i64 = 2;
+let c: i64 = 0;
+{
+    let b: i64 = 10;
+    a = 5;
+    {
+        c = a + b;
+    };
+};
+return c + b + arg;

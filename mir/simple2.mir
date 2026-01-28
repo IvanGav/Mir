@@ -1,0 +1,25 @@
+# comment test
+
+let global_var: u64 = 1 / 5 + 2;
+let global_var: u64 = (2 / 5 + 2);
+let global_var: u64 = (3 / 5 + 2) - 1;
+let global_var: u64 = (4 / 5 + 2) - 1 * (!1);
+let global_var: u64 = ((4 / 5 + 2) - 1 * (!1) + 1);
+let global_str: Str = "hello world";
+
+fn main(argc: u64, argv: u64): u64 {
+    let local_var:u64=----1;
+    if ( local_var == 1 ) {
+        print("correct behavior");
+    } else if ( local_var == -1 ) {
+        print("incorrect behavior");
+    } else {
+        let what: u64 = -1;
+    };
+
+    # assignment
+    local_var = 10;
+    print("should be 10", local_var);
+
+    while(true || false) { print("-> "); };
+};
