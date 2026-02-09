@@ -17,10 +17,12 @@ enum class NodeType {
 
     // Control
     Start, Ret,
+    If, Region,
 
     // Data
     Const,
     Add, Sub, Mul, Div, Mod, Neg,
+    Phi,
 };
 
 namespace node {

@@ -36,6 +36,30 @@ std::ostream& operator<<(std::ostream& os, Node* n) {
             return os;
         }
 
+        case NodeType::If: {
+            NodeIf* node = (NodeIf*) n;
+            os << "\tctrl = " << node->ctrl()->uid << "\n";
+            os << "\tcondition = " << node->condition()->uid << "\n";
+            return os;
+        }
+
+        case NodeType::Region: {
+            NodeRegion* node = (NodeRegion*) n;
+            for(u32 i = 0; i < node->self.input.size; i++) {
+                os << "\tctrl" << i << " = " << node->ctrl(i)->uid << "\n";
+            }
+            return os;
+        }
+
+        case NodeType::Phi: {
+            NodePhi* node = (NodePhi*) n;
+            os << "\tregion = " << node->region()->uid << "\n";
+            for(u32 i = 0; i < node->self.input.size; i++) {
+                os << "\tdata" << i << " = " << node->data(i)->uid << "\n";
+            }
+            return os;
+        }
+
         case NodeType::Proj: {
             NodeProj* node = (NodeProj*) n;
             os << "\tindex = " << node->index << "\n";

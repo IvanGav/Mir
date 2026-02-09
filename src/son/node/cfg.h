@@ -8,6 +8,8 @@ namespace node {
         switch(n->nt) {
             case NodeType::Start:
             case NodeType::Ret:
+            case NodeType::If:
+            case NodeType::Region:
                 return true;
             
             case NodeType::Scope:
@@ -18,6 +20,7 @@ namespace node {
             case NodeType::Div:
             case NodeType::Mod:
             case NodeType::Neg:
+            case NodeType::Phi:
                 return false;
             
             case NodeType::Proj:

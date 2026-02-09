@@ -12,6 +12,16 @@ namespace node {
             case NodeType::Ret:
                 return type::pool.bottom();
             
+            case NodeType::If: {
+                Type* arr[2] = {type::pool.ctrl(), type::pool.ctrl()};
+                Slice<Type*> val = Slice<Type*>::from_ptr(arr, 2);
+                return (Type*) type::pool.get_tuple(TypeTuple { .self = Type { .tinfo = TypeI::Known, .ttype = TypeT::Tuple }, .val = val });
+            }
+
+            case NodeType::Region: {
+                return type::pool.ctrl();
+            }
+            
             case NodeType::Proj: {
                 NodeProj* node = (NodeProj*)(n);
                 Type* t = node->ctrl()->type;
@@ -20,6 +30,10 @@ namespace node {
                 } else {
                     panic;
                 }
+            }
+
+            case NodeType::Phi: {
+                return type::pool.bottom(); // TODO why?
             }
 
             case NodeType::Start: {

@@ -107,6 +107,48 @@ struct Parser {
                 todo;
             }
 
+            case TokenType::If: {
+                this->read_token(TokenType::LeftParenthese);
+                Node* condition = this->next_primary_expr();
+                this->read_token(TokenType::RightParenthese);
+                // IfNode takes current control and predicate
+                NodeIf* if_node = (NodeIf*)node::peephole((Node*)NodeIf::from_token(token).create(SCOPE_NODE->ctrl(), condition)); // TODO can i cast to NodeIf after peephole??
+                // Setup projection nodes
+                Node* proj_true = node::peephole((Node*)NodeProj::generated(0).create((Node*)if_node));
+                Node* proj_false = node::peephole((Node*)NodeProj::generated(1).create((Node*)if_node));
+                // In if true branch, the ifT proj node becomes the ctrl
+                // But first clone the scope and set it as current
+                u32 scope_size = SCOPE_NODE->self.input.size; // ndefs
+                NodeScope* scope_false = SCOPE_NODE->copy();
+
+                // Parse the true side
+
+                SCOPE_NODE->update("$ctrl"_s, proj_true);
+                this->read_token(TokenType::LeftCurly);
+                Node* true_branch = this->next_block_expr();
+                assert(true_branch->type->tinfo == TypeI::Bottom);
+                NodeScope* scope_true = SCOPE_NODE;
+
+                // Parse the false side
+                SCOPE_NODE = scope_false;
+                SCOPE_NODE->update("$ctrl"_s, proj_false);
+                if(t.peek_non_white() != ';') {
+                    // there's an else clause
+                    Node* false_branch = this->next_block_expr();
+                    assert(false_branch->type->tinfo == TypeI::Bottom);
+                    scope_false = SCOPE_NODE;
+                }
+
+                assert(scope_true->self.input.size == scope_false->self.input.size);
+
+                // Merge results
+                SCOPE_NODE = scope_true;
+
+                SCOPE_NODE->update("$ctrl"_s, scope_true->merge(scope_false));
+
+                return SCOPE_NODE->ctrl();
+            }
+
             case TokenType::EndOfLine: {
                 error = "Expected a symbol, but ; found"_s;
                 return nullptr;
@@ -253,7 +295,6 @@ struct Parser {
     }
 
     // Assume that the leading `{` has already been read
-    // Does not return a value! (returns nullptr)
     Node* next_block_expr() {
         SCOPE_NODE->push();
         Node* expr = nullptr;

@@ -15,10 +15,39 @@ namespace node {
         switch(n->nt) {
             case NodeType::Scope:
             case NodeType::Start:
+            case NodeType::If:
+            case NodeType::Region:
             case NodeType::Ret:
             case NodeType::Proj:
             case NodeType::Const:
                 return nullptr;
+
+            case NodeType::Phi: {
+                NodePhi* node = (NodePhi*) n;
+                // Remove a "junk" Phi: Phi(x,x) is just x
+                if(node->data(0) == node->data(1))
+                    return node->data(0);
+
+                // Pull "down" a common data op.  One less op in the world.  One more
+                // Phi, but Phis do not make code.
+                //   Phi(op(A,B),op(Q,R),op(X,Y)) becomes
+                //     op(Phi(A,Q,X), Phi(B,R,Y)).
+                Node op = in(1);
+                if( op.nIns()==3 && op.in(0)==null && !op.isCFG() && same_op() ) {
+                    Node[] lhss = new Node[nIns()];
+                    Node[] rhss = new Node[nIns()];
+                    lhss[0] = rhss[0] = in(0); // Set Region
+                    for( int i=1; i<nIns(); i++ ) {
+                        lhss[i] = in(i).in(1);
+                        rhss[i] = in(i).in(2);
+                    }
+                    Node phi_lhs = new PhiNode(_label,lhss).peephole();
+                    Node phi_rhs = new PhiNode(_label,rhss).peephole();
+                    return op.copy(phi_lhs,phi_rhs);
+                }
+
+                return null;
+            }
             
             case NodeType::Add: {
                 NodeBinOp* node = (NodeBinOp*) n;

@@ -189,6 +189,70 @@ struct NodeProj {
     Node* ctrl() { return self.input[0]; }
 };
 
+// Control split
+struct NodeIf {
+    // self.input = [ctrl, condition]
+    Node self;
+    // Constructors
+    static NodeIf generated() {
+        return NodeIf { .self=Node::empty(NodeType::If) };
+    }
+    static NodeIf from_token(Token t) {
+        return NodeIf { .self=Node::from_token(NodeType::If, t) };
+    }
+    NodeIf* create(Node* ctrl, Node* condition) {
+        NodeIf* ptr = Node::node_arena->push(*this);
+        ptr->self.push_inputs(ctrl);
+        ptr->self.push_inputs(condition);
+        return ptr;
+    }
+    // Getters
+    Node* ctrl() { return self.input[0]; }
+    Node* condition() { return self.input[1]; }
+};
+
+// Control merge
+struct NodeRegion {
+    // self.input = [ctrl, ctrl2, ...]
+    Node self;
+    // Constructors
+    static NodeRegion generated() {
+        return NodeRegion { .self=Node::empty(NodeType::Region) };
+    }
+    NodeRegion* create(Node* ctrl, Node* ctrl2) {
+        NodeRegion* ptr = Node::node_arena->push(*this);
+        ptr->self.push_inputs(ctrl);
+        ptr->self.push_inputs(ctrl2);
+        return ptr;
+    }
+    // Getters
+    Node* ctrl(u32 index) { return self.input[index]; }
+};
+
+struct NodePhi {
+    // self.input = [region, input1, input2, ...]
+    Node self;
+    // Constructors
+    static NodePhi generated() {
+        return NodePhi { .self=Node::empty(NodeType::Phi) };
+    }
+    NodePhi* create(Node* ctrl, Node* data1, Node* data2) {
+        NodePhi* ptr = Node::node_arena->push(*this);
+        ptr->self.push_inputs(ctrl);
+        ptr->self.push_inputs(data1);
+        ptr->self.push_inputs(data2);
+        return ptr;
+    }
+    // Getters
+    Node* region() { return self.input[0]; }
+    // 0-indexed
+    Node* data(u32 index) { return self.input[index+1]; }
+};
+
+struct NodeStop {
+
+};
+
 // TODO remove this garbage crutch
 Node* START_NODE;
 NodeScope* SCOPE_NODE;

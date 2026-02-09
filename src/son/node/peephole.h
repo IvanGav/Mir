@@ -20,6 +20,9 @@ namespace node {
                 return n;
             
             case NodeType::Proj: // TODO make sure that's right
+            case NodeType::If: // TODO make sure that's right
+            case NodeType::Region: // TODO make sure that's right
+            case NodeType::Phi: // TODO make sure that's right
             case NodeType::Add:
             case NodeType::Sub:
             case NodeType::Mul:
