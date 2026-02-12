@@ -119,7 +119,7 @@ struct Parser {
                 // In if true branch, the ifT proj node becomes the ctrl
                 // But first clone the scope and set it as current
                 u32 scope_size = SCOPE_NODE->self.input.size; // ndefs
-                NodeScope* scope_false = SCOPE_NODE->copy();
+                NodeScope* scope_false = SCOPE_NODE->duplicate();
 
                 // Parse the true side
 

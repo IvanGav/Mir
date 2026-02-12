@@ -83,4 +83,12 @@ struct VariableScope {
         assert(top != nullptr);
         return top->names.size;
     }
+
+    VariableScope<T> clone() {
+        VariableScope<T> c = VariableScope<T>::create(*arena);
+        for(Scope* s = top; s != nullptr; s++) {
+            todo;
+        }
+        return c;
+    }
 };

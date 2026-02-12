@@ -148,6 +148,20 @@ struct NodeScope {
 
     /* Methods */
 
+    NodeScope* duplicate() {
+        NodeScope* dup = Node::node_arena->push(NodeScope::with_arena(*scope.arena));
+        // Our goals are:
+        // 1) duplicate the name bindings of the ScopeNode across all stack levels
+        // 2) Make the new ScopeNode a user of all the nodes bound
+        // 3) Ensure that the order of defs is the same to allow easy merging
+        
+        dup->scope = scope.clone();
+        for(u32 i = 0; i < self.input.size; i++) {
+            ((Node*)dup)->push_input(self.input[i]);
+        }
+        return dup;
+    }
+
     void push() { scope.push(); }
     void pop() { self.pop_inputs(scope.top_size()); scope.pop(); }
     // If doesn't exist, return nullptr
