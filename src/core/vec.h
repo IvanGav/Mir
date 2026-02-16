@@ -45,8 +45,6 @@ struct Vec {
         return v;
     }
 
-    // ~Vec() { if(data != nullptr) arena->free(data); }
-
     void reserve(usize capacity) {
         mem::Arena* arena = (this->arena == nullptr) ? &default_arena : this->arena;
         data = arena->realloc(data, this->capacity, capacity);
@@ -55,15 +53,6 @@ struct Vec {
     
     bool empty() {
         return size == 0;
-    }
-
-    void push(T&& e) {
-        if(size == capacity) {
-            if(capacity == 0) reserve(8);
-            else reserve(capacity*2);
-        }
-        data[size] = e;
-        size++;
     }
 
     void push(T& e) {
@@ -176,6 +165,21 @@ struct Vec {
     MutSlice<T> mut_slice_range(usize start, usize end) {
         assert(end <= this->size);
         return MutSlice<T> { .data = data + start, .size = size };
+    }
+
+    /* Cloning */
+
+    // if `new_arena` is `nullptr`, use the same arena as `this`
+    // shallow clone **NOT DEEP CLONE**
+    Vec<T> clone(mem::Arena* new_arena = nullptr) {
+        if(new_arena == nullptr) new_arena = arena;
+        Vec<T> cloned {};
+        cloned.arena = new_arena;
+        cloned.capacity = capacity;
+        cloned.size = size;
+        cloned.data = new_arena->alloc<T>(capacity);
+        mem::copy<T>(cloned.data, data, size);
+        return cloned;
     }
 
     /* STL Compatibility */

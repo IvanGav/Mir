@@ -7,87 +7,70 @@
 
 template <typename T>
 struct VariableScope {
-    struct Scope {
-        HMap<Str, T> names;
-        Scope* next;
-    };
-    
-    mem::Arena* arena;
-    Scope* top;
+    Vec<HMap<Str,T>> scopes;
 
-    static VariableScope create(mem::Arena& arena) {
-        VariableScope self { .arena = &arena, .top = nullptr };
+    static VariableScope<T> create(mem::Arena& arena) {
+        VariableScope<T> self { .scopes = Vec<HMap<Str,T>>::create(arena) };
         self.push();
         return self;
     }
 
     // Push a new scope to be innermost
     void push() {
-        Scope* old_top = top;
-        top = arena->alloc<Scope>(1);
-        top->names.arena = arena;
-        top->next = old_top;
+        scopes.push(ref(HMap<Str,T>::empty(scopes.arena)));
     }
 
     // Pop the innermost scope
     void pop() {
-        assert(top != nullptr);
-        top = top->next;
+        scopes.pop();
     }
 
     T operator[](Str key) const {
-        assert(top != nullptr);
-        Scope* cur = top;
-        while(cur != nullptr) {
-            if(cur->names.exists(key)) {
-                return cur->names[key];
+        for(u32 i = scopes.size-1; i >= 0; i--) {
+            if(scopes[i].exists(key)) {
+                return scopes[i][key];
             }
-            cur = cur->next;
         }
         return nullptr;
     }
 
     T& operator[](Str key) {
-        assert(top != nullptr);
-        Scope* cur = top;
-        while(cur != nullptr) {
-            if(cur->names.exists(key)) {
-                return cur->names[key];
+        assert(scopes.size > 0);
+        for(u32 i = scopes.size-1; i >= 0; i--) {
+            if(scopes[i].exists(key)) {
+                return scopes[i][key];
             }
-            cur = cur->next;
         }
         panic;
-        // top->names.add(key, nullptr);
-        // return top->names[key];
     }
 
     // Define a variable in the innermost scope
     void define(Str var_name, T& value) {
-        assert(top != nullptr);
-        top->names.add(var_name, value);
+        scopes.back().add(var_name, value);
     }
 
     bool contains(Str key) {
-        assert(top != nullptr);
-        Scope* cur = top;
-        while(cur != nullptr) {
-            if(cur->names.exists(key)) {
+        for(u32 i = scopes.size-1; i >= 0; i--) {
+            if(scopes[i].exists(key)) {
                 return true;
             }
-            cur = cur->next;
         }
         return false;
     }
 
-    usize top_size() {
-        assert(top != nullptr);
-        return top->names.size;
+    HMap<Str,T>& top() {
+        return scopes.back();
     }
 
-    VariableScope<T> clone() {
-        VariableScope<T> c = VariableScope<T>::create(*arena);
-        for(Scope* s = top; s != nullptr; s++) {
-            todo;
+    usize top_size() {
+        return scopes.back().size;
+    }
+
+    VariableScope<T> deep_clone() {
+        VariableScope<T> c { .scopes = Vec<HMap<Str,T>>::create(*scopes.arena) };
+        c.scopes = this->scopes.clone(scopes.arena);
+        for(u32 i = 0; i < scopes.size; i++) {
+            c.scopes[i] = scopes[i].clone(scopes.arena);
         }
         return c;
     }

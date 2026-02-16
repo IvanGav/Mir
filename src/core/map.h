@@ -36,9 +36,9 @@ struct HMap {
 
     mem::Arena* arena;
 
-    static HMap empty(mem::Arena& arena = default_arena) {
+    static HMap empty(mem::Arena* arena = &default_arena) {
         HMap<K,V> m {};
-        m.arena = &arena;
+        m.arena = arena;
         return m;
     }
 
@@ -126,5 +126,17 @@ struct HMap {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
         return map[index].exists();
+    }
+
+    /* Cloning */
+
+    // if `new_arena` is `nullptr`, use the same arena as `this`
+    HMap<K, V> clone(mem::Arena* new_arena = nullptr) {
+        if(new_arena == nullptr) new_arena = arena;
+        HMap<K, V> cloned {};
+        cloned.size = size;
+        cloned.capacity = capacity;
+        cloned.map = map.clone(new_arena);
+        return cloned;
     }
 };

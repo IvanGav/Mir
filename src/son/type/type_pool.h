@@ -50,17 +50,17 @@ struct TypePool {
     }
     
     // bool
-    TypeInt* bool_any() {
-        return this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Bool}, .val_min = 0, .val_max = 1 });
+    Type* bool_any() {
+        return (Type*) this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Bool}, .val_min = 0, .val_max = 1 });
     }
-    TypeInt* bool_false() {
-        return this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Bool}, .val_min = 0, .val_max = 0 });
+    Type* bool_false() {
+        return (Type*) this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Bool}, .val_min = 0, .val_max = 0 });
     }
-    TypeInt* bool_true() {
-        return this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Bool}, .val_min = 1, .val_max = 1 });
+    Type* bool_true() {
+        return (Type*) this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Bool}, .val_min = 1, .val_max = 1 });
     }
     // int
-    TypeInt* int_sized(u8 bytes) {
+    Type* int_sized(u8 bytes) {
         i64 max, min;
         switch(bytes) {
             case 1: max = I8_MAX; min = I8_MIN; break;
@@ -69,24 +69,24 @@ struct TypePool {
             case 8: max = I64_MAX; min = I64_MIN; break;
             default: panic;
         }
-        return this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .val_min = std::bit_cast<i64>(min), .val_max = std::bit_cast<i64>(max)});
+        return (Type*) this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .val_min = std::bit_cast<i64>(min), .val_max = std::bit_cast<i64>(max)});
     }
-    TypeInt* int_const(i64 val) {
-        return this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .val_min = std::bit_cast<i64>(val), .val_max = std::bit_cast<i64>(val) });
+    Type* int_const(i64 val) {
+        return (Type*) this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .val_min = std::bit_cast<i64>(val), .val_max = std::bit_cast<i64>(val) });
     }
-    TypeInt* get_int(TypeInt t) {
+    Type* get_int(TypeInt t) {
         s_type_int.add(t);
-        return s_type_int.get(t);
+        return (Type*) s_type_int.get(t);
     }
 
     // float
-    TypeFloat* get_float(TypeFloat t) {
+    Type* get_float(TypeFloat t) {
         s_type_float.add(t);
-        return s_type_float.get(t);
+        return (Type*) s_type_float.get(t);
     }
 
     // tuple
-    TypeTuple* get_tuple(TypeTuple t) {
+    Type* get_tuple(TypeTuple t) {
         // Be a bit careful here
         // TypeTuple contains a slice, which may not be valid forever
         // if doesn't exist, deep clone; retrieve otherwise
@@ -96,7 +96,11 @@ struct TypePool {
             TypeTuple deep_clone = TypeTuple { .self = t.self, .val = slice_deep_clone};
             s_type_tuple.add(deep_clone);
         }
-        return s_type_tuple.get(t);
+        return (Type*) s_type_tuple.get(t);
+    }
+    
+    Type* from_slice(Slice<Type*> args) {
+        return (Type*) this->get_tuple(TypeTuple { .self = Type::known(TypeT::Tuple), .val = args });
     }
 };
 

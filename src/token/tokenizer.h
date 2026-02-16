@@ -18,8 +18,12 @@ struct Token {
     TokenType tt;
 
     static const Token eof;
+    static const Token empty;
+
+    bool operator==(const Token& other) const { return val == other.val && tt == other.tt; }
 };
 
+const Token Token::empty = {}; // wtf c++
 const Token Token::eof { .val={ .data=nullptr, .size=0 }, .tt=TokenType::EndOfFile }; // wtf c++
 
 // `next_token`, `next_type` and `next_binary_op` are the only methods that should be called externally

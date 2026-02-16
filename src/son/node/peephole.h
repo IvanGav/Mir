@@ -3,7 +3,6 @@
 #include "node.h"
 #include "compute.h"
 #include "idealize.h"
-#include "methods.h"
 
 namespace node {
     Node* peephole(Node* n) {
@@ -30,7 +29,7 @@ namespace node {
             case NodeType::Mod:
             case NodeType::Neg: {
                 if(type::constant(n->type)) {
-                    Node* replacement = node::peephole((Node*)NodeConst::generated(n->type).create(START_NODE));
+                    Node* replacement = NodeConst::create(n->type, START_NODE);
                     n->kill();
                     return replacement;
                 }

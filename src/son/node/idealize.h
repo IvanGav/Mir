@@ -63,8 +63,8 @@ namespace node {
 
                 // Add of same is a multiply by 2
                 if(lhs == rhs) {
-                    Node* multiplier = node::peephole((Node*) NodeConst::generated((Type*) type::pool.int_const(2)).create(START_NODE));
-                    return (Node*) NodeBinOp::generated(Op::Mul).create(lhs, multiplier);
+                    Node* multiplier = NodeConst::create((Type*) type::pool.int_const(2), START_NODE);
+                    return NodeBinOp::create(Op::Mul, lhs, multiplier);
                 }
 
                 // Move ops such that: adds are on the left, consts are on the right
@@ -83,8 +83,8 @@ namespace node {
                 // Rotate (add add add) to remove the add on RHS
                 if(rhs->nt == NodeType::Add) {
                     NodeBinOp* rhs_add = (NodeBinOp*) rhs;
-                    Node* new_lhs = node::peephole((Node*) NodeBinOp::generated(Op::Add).create(lhs, rhs_add->lhs()));
-                    return (Node*) NodeBinOp::generated(Op::Add).create(new_lhs, rhs_add->rhs());
+                    Node* new_lhs = NodeBinOp::create(Op::Add, lhs, rhs_add->lhs());
+                    return NodeBinOp::create(Op::Add, new_lhs, rhs_add->rhs());
                 }
 
                 // Now we might see (add add non) or (add non non) but never (add non add) nor (add add add)
@@ -103,8 +103,8 @@ namespace node {
                 NodeBinOp* lhs_add = (NodeBinOp*) lhs;
                 if(lhs_add->rhs()->nt == NodeType::Const && rhs->nt == NodeType::Const) {
                     Node* new_lhs = lhs_add->lhs();
-                    Node* new_rhs = node::peephole((Node*) NodeBinOp::generated(Op::Add).create(lhs_add->rhs(), node->rhs()));
-                    return (Node*) NodeBinOp::generated(Op::Add).create(new_lhs, new_rhs);
+                    Node* new_rhs = NodeBinOp::create(Op::Add, lhs_add->rhs(), node->rhs());
+                    return NodeBinOp::create(Op::Add, new_lhs, new_rhs);
                 }
 
                 // Now we sort along the spline via rotates, to gather similar things together.
@@ -112,9 +112,9 @@ namespace node {
                 // Do we rotate (x + y) + z
                 // into         (x + z) + y ?
                 if(should_swap(lhs_add->rhs(), node->rhs())) {
-                    Node* new_lhs = node::peephole((Node*) NodeBinOp::generated(Op::Add).create(lhs_add->lhs(), node->rhs()));
+                    Node* new_lhs = NodeBinOp::create(Op::Add, lhs_add->lhs(), node->rhs());
                     Node* new_rhs = lhs_add->rhs();
-                    return (Node*) NodeBinOp::generated(Op::Add).create(new_lhs, new_rhs);
+                    return NodeBinOp::create(Op::Add, new_lhs, new_rhs);
                 }
 
                 return nullptr;
@@ -132,7 +132,7 @@ namespace node {
                 if(rt == (Type*) type::pool.int_const(0)) return lhs;
 
                 // Negation identity
-                if(lt == (Type*) type::pool.int_const(0)) return (Node*) NodeUnOp::generated(Op::Neg).create(rhs);
+                if(lt == (Type*) type::pool.int_const(0)) return NodeUnOp::create(Op::Neg, rhs);
 
                 return nullptr;
             }
@@ -180,7 +180,7 @@ namespace node {
                 assert(!(type::constant(lt) && type::constant(rt))); // node::peephole would've replaced with constant node
 
                 // Modulo 1 identity
-                if(rt == (Type*) type::pool.int_const(1)) return (Node*) NodeConst::generated((Type*) type::pool.int_const(0)).create(START_NODE);
+                if(rt == (Type*) type::pool.int_const(1)) return NodeConst::create((Type*) type::pool.int_const(0), START_NODE);
 
                 return nullptr;
             }

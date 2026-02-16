@@ -89,6 +89,10 @@ struct Node {
         n.token = Maybe<Token>::some(t);
         return n;
     }
+    // Maybe token
+    static Node create(NodeType type, Token t = Token::empty) {
+        return t == Token::empty ? Node::empty(type) : Node::from_token(type, t);
+    }
 
     /* Methods */
     // # WARNING 
@@ -99,7 +103,7 @@ struct Node {
     }
     void push_input(Node* new_input) {
         input.push(new_input);
-        if(new_input != nullptr) new_input->output.push(this);
+        if(new_input != nullptr) new_input->output.push(ref(this));
     }
     void pop_input() {
         Node* last_input = input.pop();
@@ -117,7 +121,7 @@ struct Node {
         Node* old_input = input[index];
         if(old_input == new_input) return this; // No change
         if(new_input != nullptr)
-            new_input->output.push(this);
+            new_input->output.push(ref(this));
         // If the old input exists, remove a def->use edge
         if(old_input != nullptr) {
             old_input->output.remove_first_of(this); // remove this from last node's output

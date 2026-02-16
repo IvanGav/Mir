@@ -2,7 +2,6 @@
 
 #include "node/node.h"
 
-#include "node/methods.h"
 #include "node/cfg.h"
 #include "node/debug.h"
 #include "node/compute.h"

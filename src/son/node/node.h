@@ -1,9 +1,13 @@
 #pragma once
 
-#include "../../core/prelude.h"
+#include "../prelude.h"
 
 #include "node_def.h"
 #include "scope.h"
+
+namespace node {
+    Node* peephole(Node*);
+};
 
 /* Specialized Nodes */
 
@@ -15,37 +19,33 @@
 // - from_token (token provided, this node is created directly from some source code symbol)
 
 struct NodeStart {
+    // self.input = []
     Node self;
     TypeTuple* args;
-    // Constructors
-    static NodeStart generated(TypeTuple* args) {
-        return NodeStart { .self = Node::empty(NodeType::Start), .args = args };
+
+    // Consturctors
+    static Node* create(Slice<Type*> args) {
+        NodeStart node = NodeStart { 
+            .self = Node::empty(NodeType::Start),
+            .args = (TypeTuple*) type::pool.from_slice(args)
+        };
+        return node::peephole((Node*) Node::node_arena->push(node));
     }
-    static NodeStart with_args(Slice<Type*> args) {
-        return NodeStart::generated(type::pool.get_tuple(TypeTuple { .self = Type::known(TypeT::Tuple), .val = args }));
-    }
-    NodeStart* create() {
-        self.type = (Type*) args;
-        return Node::node_arena->push(*this);
-    }
+
     // Getters
-    Type* arg(u32 index) { return ((TypeTuple*)this->args)->val[index]; }
+    Type* arg(u32 index) { return args->val[index]; }
 };
 
 struct NodeRet {
     // self.input = [ctrl, data]
     Node self;
+
     // Constructors
-    static NodeRet generated() {
-        return NodeRet { .self=Node::empty(NodeType::Ret) };
-    }
-    static NodeRet from_token(Token t) {
-        return NodeRet { .self=Node::from_token(NodeType::Ret, t) };
-    }
-    NodeRet* create(Node* ctrl, Node* data) {
-        NodeRet* ptr = Node::node_arena->push(*this);
-        ptr->self.push_inputs(ctrl, data);
-        return ptr;
+    static Node* create(Node* ctrl, Node* data, Token t = Token::empty) {
+        NodeRet node = { .self = Node::create(NodeType::Ret, t) };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl, data);
+        return node::peephole(ptr);
     }
     // Getters
     Node* ctrl() { return self.input[0]; }
@@ -56,20 +56,18 @@ struct NodeConst {
     // self.input = [ctrl]
     Node self;
     Type* val;
+
     // Constructors
-    static NodeConst generated(Type* value) {
-        assert(value != nullptr);
-        return NodeConst { .self=Node::empty(NodeType::Const), .val=value };
+    static Node* create(Type* value, Node* ctrl, Token t = Token::empty) {
+        NodeConst node = { 
+            .self = Node::create(NodeType::Const, t),
+            .val = value
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl);
+        return node::peephole(ptr);
     }
-    static NodeConst from_token(Type* value, Token t) {
-        assert(value != nullptr);
-        return NodeConst { .self=Node::from_token(NodeType::Const, t), .val=value };
-    }
-    NodeConst* create(Node* ctrl) {
-        NodeConst* ptr = Node::node_arena->push(*this);
-        ptr->self.push_inputs(ctrl);
-        return ptr;
-    }
+
     // Getters
     Node* ctrl() { return self.input[0]; }
 };
@@ -78,20 +76,22 @@ struct NodeBinOp {
     // self.input = [lhs, rhs]
     Node self;
     Op op;
+
     // Constructors
-    static NodeBinOp generated(Op oper) {
-        assert(op::binary(oper));
-        return NodeBinOp { .self=Node::empty(node::type_of_op(oper)), .op=oper };
+    static Node* create(Op op, Node* lhs, Node* rhs, Token t = Token::empty) {
+        assert(op::binary(op));
+        NodeBinOp node = { 
+            .self = Node::create(node::type_of_op(op), t),
+            .op = op
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(lhs, rhs);
+        return node::peephole(ptr);
     }
-    static NodeBinOp from_token(Token t, Op oper) {
-        assert(op::binary(oper));
-        return NodeBinOp { .self=Node::from_token(node::type_of_op(oper), t), .op=oper };
+    static Node* from_token(Node* lhs, Node* rhs, Token t) {
+        return NodeBinOp::create(op::from_str(t.val), lhs, rhs, t);
     }
-    NodeBinOp* create(Node* lhs, Node* rhs) {
-        NodeBinOp* ptr = Node::node_arena->push(*this);
-        ptr->self.push_inputs(lhs, rhs);
-        return ptr;
-    }
+
     // Getters
     Node* lhs() { return self.input[0]; }
     Node* rhs() { return self.input[1]; }
@@ -108,20 +108,19 @@ struct NodeUnOp {
     // self.input = [rhs]
     Node self;
     Op op;
+
     // Constructors
-    static NodeUnOp generated(Op oper) {
-        assert(op::unary(oper));
-        return NodeUnOp { .self=Node::empty(node::type_of_op(oper)), .op=oper };
+    static Node* create(Op op, Node* rhs, Token t = Token::empty) {
+        assert(op::unary(op));
+        NodeUnOp node = { 
+            .self = Node::create(node::type_of_op(op), t),
+            .op = op
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(rhs);
+        return node::peephole(ptr);
     }
-    static NodeUnOp from_token(Token t, Op oper) {
-        assert(op::unary(oper));
-        return NodeUnOp { .self=Node::from_token(node::type_of_op(oper), t), .op=oper };
-    }
-    NodeUnOp* create(Node* rhs) {
-        NodeUnOp* ptr = Node::node_arena->push(*this);
-        ptr->self.push_inputs(rhs);
-        return ptr;
-    }
+
     // Getters
     Node* rhs() { return self.input[0]; }
 };
@@ -130,34 +129,31 @@ struct NodeScope {
     // self.input = [ctrl, ...]
     Node self;
     VariableScope<usize> scope; // holds var_name -> index in self.input
+
     // Constructors
-    static NodeScope with_arena(mem::Arena& arena) {
-        NodeScope n = NodeScope { .self = Node::empty(NodeType::Scope), .scope = VariableScope<usize>::create(arena) };
-        n.self.type = type::pool.bottom(); // NodeScope is a bit special and starts out as bottom type; I don't think it matters, but Simple has this so...
-        return n;
-    }
-    NodeScope* create(Node* ctrl) {
-        assert(ctrl != nullptr);
-        NodeScope* ptr = Node::node_arena->push(*this);
-        // ptr->self.push_inputs(ctrl);
-        ptr->define("$ctrl"_s, ctrl);
+    static NodeScope* create(mem::Arena& arena, Node* ctrl) {
+        NodeScope node = NodeScope { .self = Node::create(NodeType::Scope), .scope = VariableScope<usize>::create(arena) };
+        NodeScope* ptr = Node::node_arena->push(node);
+        ptr->self.type = type::pool.bottom();
+        ptr->define(CTRL_STR, ctrl);
         return ptr;
     }
+
     // Getters
     Node* ctrl() { return self.input[0]; }
 
-    /* Methods */
-
+    // Methods
     NodeScope* duplicate() {
-        NodeScope* dup = Node::node_arena->push(NodeScope::with_arena(*scope.arena));
+        NodeScope* dup = NodeScope::create(*scope.scopes.arena, nullptr);
+
         // Our goals are:
         // 1) duplicate the name bindings of the ScopeNode across all stack levels
         // 2) Make the new ScopeNode a user of all the nodes bound
         // 3) Ensure that the order of defs is the same to allow easy merging
         
-        dup->scope = scope.clone();
+        dup->scope = scope.deep_clone();
         for(u32 i = 0; i < self.input.size; i++) {
-            ((Node*)dup)->push_input(self.input[i]);
+            dup->self.push_input(self.input[i]);
         }
         return dup;
     }
@@ -178,33 +174,32 @@ struct NodeScope {
         self.push_input(new_value);
         return new_value;
     }
-    // Node* define_empty(Str var_name) {
-    //     scope.define(var_name);
-    //     return nullptr;
-    // }
 };
 
 struct NodeProj {
     // self.input = [ctrl]
     Node self;
     u32 index;
+
     // Constructors
-    static NodeProj generated(u32 tuple_index) {
-        return NodeProj { .self = Node::empty(NodeType::Proj), .index = tuple_index };
-    }
-    NodeProj* create(Node* ctrl) {
+    static Node* create(u32 tuple_index, Node* ctrl) {
         assert(ctrl != nullptr);
         assert(ctrl->type->ttype == TypeT::Tuple);
-        NodeProj* ptr = Node::node_arena->push(*this);
-        ptr->self.push_inputs(ctrl);
-        return ptr;
+        NodeProj node = { 
+            .self = Node::create(NodeType::Proj),
+            .index = tuple_index
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl);
+        return node::peephole(ptr);
     }
+
     // Getters
     Node* ctrl() { return self.input[0]; }
 };
 
 // Control split
-struct NodeIf {
+struct NodeIf { // TODO
     // self.input = [ctrl, condition]
     Node self;
     // Constructors
@@ -226,7 +221,7 @@ struct NodeIf {
 };
 
 // Control merge
-struct NodeRegion {
+struct NodeRegion { // TODO
     // self.input = [ctrl, ctrl2, ...]
     Node self;
     // Constructors
@@ -243,7 +238,7 @@ struct NodeRegion {
     Node* ctrl(u32 index) { return self.input[index]; }
 };
 
-struct NodePhi {
+struct NodePhi { // TODO
     // self.input = [region, input1, input2, ...]
     Node self;
     // Constructors

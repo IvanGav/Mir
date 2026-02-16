@@ -71,6 +71,10 @@ namespace str {
     std::string to_cppstr(Str str) {
         return std::string((const char*) str.data, str.size);
     }
+
+    Str concat(Str* c_str_array, u32 size) {
+        return str::from_slice_of_str(ref(Slice<Str>::from_ptr(c_str_array, size)));
+    }
 };
 
 Str operator ""_s(const char* s, long unsigned int len) {

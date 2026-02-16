@@ -133,4 +133,16 @@ struct HSet {
         }
         return set[index].exists();
     }
+
+    /* Cloning */
+
+    // if `new_arena` is `nullptr`, use the same arena as `this`
+    HSet<T> clone(mem::Arena* new_arena = nullptr) {
+        if(new_arena == nullptr) new_arena = arena;
+        HSet<T> cloned {};
+        cloned.size = size;
+        cloned.capacity = capacity;
+        cloned.set = set.clone(new_arena);
+        return cloned;
+    }
 };
