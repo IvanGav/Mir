@@ -125,6 +125,117 @@ struct NodeUnOp {
     Node* rhs() { return self.input[0]; }
 };
 
+struct NodeProj {
+    // self.input = [ctrl]
+    Node self;
+    u32 index;
+
+    // Constructors
+    static Node* create(u32 tuple_index, Node* ctrl) {
+        assert(ctrl != nullptr);
+        assert(ctrl->type != nullptr);
+        assert(ctrl->type->ttype == TypeT::Tuple);
+        NodeProj node = { 
+            .self = Node::create(NodeType::Proj),
+            .index = tuple_index
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl);
+        return node::peephole(ptr);
+    }
+
+    // Getters
+    Node* ctrl() { return self.input[0]; }
+};
+
+// Control split
+struct NodeIf {
+    // self.input = [ctrl, condition]
+    Node self;
+
+    // Constructors
+    static Node* create(Node* ctrl, Node* condition, Token t = Token::empty) {
+        assert(ctrl != nullptr);
+        NodeIf node = { 
+            .self = Node::create(NodeType::If, t)
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl, condition);
+        return node::peephole(ptr);
+    }
+
+    // Getters
+    Node* ctrl() { return self.input[0]; }
+    Node* condition() { return self.input[1]; }
+};
+
+// Control merge
+struct NodeRegion {
+    // self.input = [ctrl, ctrl2, ...]
+    Node self;
+
+    // Constructors
+    static Node* create(Node* ctrl1, Node* ctrl2) {
+        assert(ctrl1 != nullptr);
+        assert(ctrl2 != nullptr);
+        NodeRegion node = { 
+            .self = Node::create(NodeType::Region)
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl1, ctrl2);
+        return node::peephole(ptr);
+    }
+
+    // Getters
+    Node* ctrl(u32 index) { return self.input[index]; }
+};
+
+struct NodePhi {
+    // self.input = [region, input1, input2, ...]
+    Node self;
+
+    // Constructors
+    // TODO make vararg
+    static Node* create(Node* ctrl, Node* data1, Node* data2) {
+        assert(ctrl != nullptr);
+        NodePhi node = { 
+            .self = Node::create(NodeType::Phi)
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl, data1, data2);
+        return node::peephole(ptr);
+    }
+    static Node* create(Node* ctrl, Slice<Node*> data_list) {
+        assert(ctrl != nullptr);
+        NodePhi node = { 
+            .self = Node::create(NodeType::Phi)
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl);
+        for(u32 i = 0; i < data_list.size; i++) {
+            ptr->push_input(data_list[i]);
+        }
+        return node::peephole(ptr);
+    }
+
+    // Getters
+    Node* region() { return self.input[0]; }
+    // 0-indexed
+    Node* data(u32 index) { return self.input[index+1]; }
+    u32 data_size() { return self.input.size-1; }
+    bool all_same() {
+        NodeType nt = this->data(0)->nt;
+        for(u32 i = 1; i < this->data_size(); i++) {
+            if(this->data(i)->nt != nt) return false;
+        }
+        return true;
+    }
+};
+
+struct NodeStop {
+
+};
+
 struct NodeScope {
     // self.input = [ctrl, ...]
     Node self;
@@ -152,10 +263,24 @@ struct NodeScope {
         // 3) Ensure that the order of defs is the same to allow easy merging
         
         dup->scope = scope.deep_clone();
-        for(u32 i = 0; i < self.input.size; i++) {
+        for(u32 i = 1; i < self.input.size; i++) {
             dup->self.push_input(self.input[i]);
         }
         return dup;
+    }
+
+    // Return the NodeRegion that connects
+    Node* merge(NodeScope* other) {
+        this->update(CTRL_STR, NodeRegion::create(this->ctrl(), other->ctrl()));
+        Node* region = this->ctrl();
+        // Note that we skip i==0, which is bound to '$ctrl'
+        for(u32 i = 1; i < self.input.size; i++) {
+            if(self.input[i] != other->self.input[i]) {
+                self.set_input(i, NodePhi::create(region, self.input[i], other->self.input[i]));
+            }
+        }
+        ((Node*)other)->kill();
+        return region;
     }
 
     void push() { scope.push(); }
@@ -176,92 +301,6 @@ struct NodeScope {
     }
 };
 
-struct NodeProj {
-    // self.input = [ctrl]
-    Node self;
-    u32 index;
-
-    // Constructors
-    static Node* create(u32 tuple_index, Node* ctrl) {
-        assert(ctrl != nullptr);
-        assert(ctrl->type->ttype == TypeT::Tuple);
-        NodeProj node = { 
-            .self = Node::create(NodeType::Proj),
-            .index = tuple_index
-        };
-        Node* ptr = (Node*) Node::node_arena->push(node);
-        ptr->push_inputs(ctrl);
-        return node::peephole(ptr);
-    }
-
-    // Getters
-    Node* ctrl() { return self.input[0]; }
-};
-
-// Control split
-struct NodeIf { // TODO
-    // self.input = [ctrl, condition]
-    Node self;
-    // Constructors
-    static NodeIf generated() {
-        return NodeIf { .self=Node::empty(NodeType::If) };
-    }
-    static NodeIf from_token(Token t) {
-        return NodeIf { .self=Node::from_token(NodeType::If, t) };
-    }
-    NodeIf* create(Node* ctrl, Node* condition) {
-        NodeIf* ptr = Node::node_arena->push(*this);
-        ptr->self.push_inputs(ctrl);
-        ptr->self.push_inputs(condition);
-        return ptr;
-    }
-    // Getters
-    Node* ctrl() { return self.input[0]; }
-    Node* condition() { return self.input[1]; }
-};
-
-// Control merge
-struct NodeRegion { // TODO
-    // self.input = [ctrl, ctrl2, ...]
-    Node self;
-    // Constructors
-    static NodeRegion generated() {
-        return NodeRegion { .self=Node::empty(NodeType::Region) };
-    }
-    NodeRegion* create(Node* ctrl, Node* ctrl2) {
-        NodeRegion* ptr = Node::node_arena->push(*this);
-        ptr->self.push_inputs(ctrl);
-        ptr->self.push_inputs(ctrl2);
-        return ptr;
-    }
-    // Getters
-    Node* ctrl(u32 index) { return self.input[index]; }
-};
-
-struct NodePhi { // TODO
-    // self.input = [region, input1, input2, ...]
-    Node self;
-    // Constructors
-    static NodePhi generated() {
-        return NodePhi { .self=Node::empty(NodeType::Phi) };
-    }
-    NodePhi* create(Node* ctrl, Node* data1, Node* data2) {
-        NodePhi* ptr = Node::node_arena->push(*this);
-        ptr->self.push_inputs(ctrl);
-        ptr->self.push_inputs(data1);
-        ptr->self.push_inputs(data2);
-        return ptr;
-    }
-    // Getters
-    Node* region() { return self.input[0]; }
-    // 0-indexed
-    Node* data(u32 index) { return self.input[index+1]; }
-};
-
-struct NodeStop {
-
-};
-
-// TODO remove this garbage crutch
+// TODO remove this crutch
 Node* START_NODE;
 NodeScope* SCOPE_NODE;

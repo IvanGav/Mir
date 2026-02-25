@@ -147,4 +147,19 @@ struct Node {
         type = nullptr; // Flag as dead
         assert(this->dead());
     }
+
+    // helpers
+
+    bool is_binop() {
+        switch(nt) {
+            case NodeType::Add:
+            case NodeType::Sub:
+            case NodeType::Mul:
+            case NodeType::Div:
+            case NodeType::Mod:
+                return true;
+            default:
+                return false;
+        }
+    }
 };

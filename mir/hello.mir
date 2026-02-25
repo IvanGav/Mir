@@ -10,4 +10,11 @@ let c: i64 = 0;
         c = a + b;
     };
 };
-return c + arg + b;
+
+if(1+2) {
+    a = 100 + arg;
+} else {
+    a = 1000 + arg;
+};
+
+return a + c + arg + b;

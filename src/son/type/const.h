@@ -13,8 +13,8 @@ namespace type {
     bool constant(Type* t) {
         assert(t != nullptr);
         switch (t->ttype) {
-            case TypeT::Pure: return false;
-            case TypeT::Ctrl: return true; // TODO make sure this is right (i have a feeling it's not)
+            case TypeT::Pure: return t->tinfo == TypeI::Top;
+            case TypeT::Ctrl: return false;
 
             case TypeT::Bool:
             case TypeT::Int: {

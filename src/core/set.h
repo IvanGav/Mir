@@ -119,6 +119,7 @@ struct HSet {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
         assert(set[index].exists());
+        // std::cout << (void*)(&(set[index].val)) << std::endl;
         return &set[index].val;
     }
 

@@ -18,6 +18,7 @@ struct TypePool {
 
     Type* request(Type t) {
         s_type.add(t);
+        assert(s_type.get(t) != nullptr);
         return s_type.get(t);
     }
     Type* bottom() {
@@ -76,12 +77,14 @@ struct TypePool {
     }
     Type* get_int(TypeInt t) {
         s_type_int.add(t);
+        assert(s_type_int.get(t) != nullptr);
         return (Type*) s_type_int.get(t);
     }
 
     // float
     Type* get_float(TypeFloat t) {
         s_type_float.add(t);
+        assert(s_type_float.get(t) != nullptr);
         return (Type*) s_type_float.get(t);
     }
 
@@ -95,7 +98,13 @@ struct TypePool {
             Slice<Type*> slice_deep_clone = Vec<Type*>::clone_slice(t.val, *type_arena).full_slice();
             TypeTuple deep_clone = TypeTuple { .self = t.self, .val = slice_deep_clone};
             s_type_tuple.add(deep_clone);
+            // std::cout << "Deep: " << deep_clone.self.hash() << std::endl;
+            // std::cout << "Given:" << t.self.hash() << std::endl;
+            // s_type_tuple.get(deep_clone);
+            // s_type_tuple.get(t);
+            // std::cout << "__________" << std::endl;
         }
+        assert(s_type_tuple.get(t) != nullptr);
         return (Type*) s_type_tuple.get(t);
     }
     

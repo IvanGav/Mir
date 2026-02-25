@@ -10,6 +10,9 @@ std::ostream& operator<<(std::ostream& os, NodeType nt) {
         case NodeType::Start:       return os << "Start";
         case NodeType::Ret:         return os << "Ret";
         case NodeType::Proj:        return os << "Proj";
+        case NodeType::If:          return os << "If";
+        case NodeType::Region:      return os << "Region";
+        case NodeType::Phi:         return os << "Phi";
         case NodeType::Const:       return os << "Const";
         case NodeType::Add:         return os << "Add";
         case NodeType::Sub:         return os << "Sub";
@@ -54,7 +57,7 @@ std::ostream& operator<<(std::ostream& os, Node* n) {
         case NodeType::Phi: {
             NodePhi* node = (NodePhi*) n;
             os << "\tregion = " << node->region()->uid << "\n";
-            for(u32 i = 0; i < node->self.input.size; i++) {
+            for(u32 i = 0; i < node->data_size(); i++) {
                 os << "\tdata" << i << " = " << node->data(i)->uid << "\n";
             }
             return os;

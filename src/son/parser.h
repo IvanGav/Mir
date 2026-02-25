@@ -55,7 +55,10 @@ struct Parser {
             case TokenType::LeftParenthese: {
                 Node* expr = this->next_primary_expr();
                 if(expr == nullptr) return nullptr;
-                if(!this->read_token(TokenType::RightParenthese)) return nullptr;
+                if(!this->read_token(TokenType::RightParenthese)) {
+                    error = "expected ')' after reading an expression that starts with '('"_s;
+                    return nullptr;
+                }
                 return expr;
             }
 
@@ -91,45 +94,7 @@ struct Parser {
 
             case TokenType::If: {
                 todo;
-                // this->read_token(TokenType::LeftParenthese);
-                // Node* condition = this->next_primary_expr();
-                // this->read_token(TokenType::RightParenthese);
-                // // IfNode takes current control and predicate
-                // Node* if_node = NodeIf::create(SCOPE_NODE->ctrl(), condition, token);
-                // // Setup projection nodes
-                // Node* proj_true = NodeProj::create(if_node, 0);
-                // Node* proj_false = NodeProj::create(if_node, 1);
-                // // In if true branch, the ifT proj node becomes the ctrl
-                // // But first clone the scope and set it as current
-                // u32 scope_size = SCOPE_NODE->self.input.size; // ndefs
-                // NodeScope* scope_false = SCOPE_NODE->duplicate();
-
-                // // Parse the true side
-
-                // SCOPE_NODE->update(CTRL_STR, proj_true);
-                // this->read_token(TokenType::LeftCurly);
-                // Node* true_branch = this->next_block_expr();
-                // assert(true_branch->type->tinfo == TypeI::Bottom);
-                // NodeScope* scope_true = SCOPE_NODE;
-
-                // // Parse the false side
-                // SCOPE_NODE = scope_false;
-                // SCOPE_NODE->update(CTRL_STR, proj_false);
-                // if(t.peek_non_white() != ';') {
-                //     // there's an else clause
-                //     Node* false_branch = this->next_block_expr();
-                //     assert(false_branch->type->tinfo == TypeI::Bottom);
-                //     scope_false = SCOPE_NODE;
-                // }
-
-                // assert(scope_true->self.input.size == scope_false->self.input.size);
-
-                // // Merge results
-                // SCOPE_NODE = scope_true;
-
-                // SCOPE_NODE->update(CTRL_STR, scope_true->merge(scope_false));
-
-                // return SCOPE_NODE->ctrl();
+                return this->next_if(token);
             }
 
             case TokenType::EndOfLine: {
@@ -157,6 +122,7 @@ struct Parser {
     // `<name> = <expr>;
     // `{ ... };`
     // `nullptr` means that source has been fully parsed or an error occurred
+    // does consume the tailing `;`
     Node* next_top_level_expr() {
         Token token = t.next_token();
 
@@ -171,7 +137,7 @@ struct Parser {
             case TokenType::VarDecl: {
                 Token var_name = t.next_token();
                 if(!this->read_token(":"_s)) { error = "Expected type when declaring a variable"_s; return nullptr; }
-                Token declared_type = t.next_type();
+                Token declared_type = t.next_type(); // TODO
                 if(!this->read_token("="_s)) { error = "Variable declaration without initialization"_s; return nullptr; }
                 Node* initializer_expr = this->next_primary_expr();
                 if(initializer_expr == nullptr) return nullptr;
@@ -193,16 +159,24 @@ struct Parser {
             case TokenType::LeftCurly: {
                 Node* block_expr = this->next_block_expr();
                 if(block_expr == nullptr) return nullptr;
-                if(!this->read_token(TokenType::RightCurly)) { error = "Expected }"_s; return nullptr; }
                 if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
                 return block_expr;
+            }
+
+            case TokenType::If: {
+                Node* if_expr = this->next_if(token);
+                if(if_expr == nullptr) return nullptr;
+                if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
+                return if_expr;
             }
 
             // skip empty expressions
             case TokenType::EndOfLine:
                 return this->next_top_level_expr();
+            
             case TokenType::EndOfFile:
                 return nullptr;
+            
             // Unexpected syntax
             default: {
                 Str errlist[2] = {"unexpected token "_s, to_str(token.tt) };
@@ -276,16 +250,67 @@ struct Parser {
     }
 
     // Assume that the leading `{` has already been read
+    // return the last expr value
     Node* next_block_expr() {
         SCOPE_NODE->push();
         Node* expr = nullptr;
         while(t.peek_non_white() != '}') {
             expr = this->next_top_level_expr();
             if(expr == nullptr) return nullptr;
-            // if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; } // TODO what if `if (true) { 10 } else { 1 };`
         }
         SCOPE_NODE->pop();
-        return NodeConst::create(type::pool.bottom(), START_NODE);
+        if(expr == nullptr) { error = "Empty block is not allowed"_s; return nullptr; }
+        if(!this->read_token(TokenType::RightCurly)) { error = "Expected }"_s; return nullptr; }
+        // return NodeConst::create(type::pool.bottom(), START_NODE);
+        return expr;
+    }
+
+    Node* next_if(Token token) {
+        if(!this->read_token(TokenType::LeftParenthese)) { error = "expected '(' after 'if'"_s; return nullptr; }
+        Node* condition = this->next_primary_expr();
+        if(!this->read_token(TokenType::RightParenthese)) { error = "condition has to end with ')'"_s; return nullptr; }
+
+        Node* if_node = NodeIf::create(SCOPE_NODE->ctrl(), condition, token);
+
+        // Set up projection nodes
+
+        Node* proj_true = NodeProj::create(0, if_node);
+        Node* proj_false = NodeProj::create(1, if_node);
+        // In if true branch, the ifT proj node becomes the ctrl
+        // But first clone the scope and set it as current
+        NodeScope* scope_false = SCOPE_NODE->duplicate();
+
+        // Parse the true side
+
+        SCOPE_NODE->update(CTRL_STR, proj_true);
+        if(!this->read_token(TokenType::LeftCurly)) { error = "expected '{' after 'if' condition"_s; return nullptr; }
+        Node* true_branch = this->next_block_expr();
+        if(true_branch == nullptr) return nullptr;
+        assert(true_branch->type->tinfo == TypeI::Bottom);
+        NodeScope* scope_true = SCOPE_NODE;
+
+        // Parse the false side
+
+        SCOPE_NODE = scope_false;
+        SCOPE_NODE->update(CTRL_STR, proj_false);
+        if(t.peek_non_white() != ';') {
+            // there's an else clause
+            if(!this->read_token(TokenType::Else)) { error = "expected 'else' clause"_s; return nullptr; }
+            if(!this->read_token(TokenType::LeftCurly)) { error = "expected '{' after 'else'"_s; return nullptr; }
+            Node* false_branch = this->next_block_expr();
+            if(false_branch == nullptr) return nullptr;
+            assert(false_branch->type->tinfo == TypeI::Bottom);
+            scope_false = SCOPE_NODE;
+        }
+
+        assert(scope_true->self.input.size == scope_false->self.input.size);
+
+        // Merge results
+        // SCOPE_NODE->update(CTRL_STR, scope_true->merge(scope_false)); // TODO erm, it's already getting updated in `NodeScope::merge`
+        scope_true->merge(scope_false);
+        SCOPE_NODE = scope_true;
+
+        return SCOPE_NODE->ctrl();
     }
 
     Token read_binop() {

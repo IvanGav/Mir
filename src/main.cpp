@@ -16,8 +16,8 @@ int main(int argc, char* argv[]) {
     mem::Arena node_arena = mem::Arena::create(10 MB);
     mem::Arena scope_arena = mem::Arena::create(10 MB);
     Node::init(node_arena);
-    // Type* inputs[2] = { type::pool.ctrl(), (Type*) type::pool.bottom(TypeT::Int) };
-    Type* inputs[2] = { type::pool.ctrl(), (Type*) type::pool.int_const(5) };
+    Type* inputs[2] = { type::pool.ctrl(), (Type*) type::pool.bottom(TypeT::Int) };
+    // Type* inputs[2] = { type::pool.ctrl(), (Type*) type::pool.int_const(5) };
     START_NODE = NodeStart::create(Slice<Type*>::from_ptr(inputs, 2));
     SCOPE_NODE = (NodeScope*) NodeScope::create(scope_arena, NodeProj::create(0, START_NODE));
     SCOPE_NODE->define("arg"_s, NodeProj::create(1, START_NODE));
@@ -36,9 +36,11 @@ int main(int argc, char* argv[]) {
         // if(n == nullptr) { printd("nullptr"); } else { printd(n); }
     } while(n != nullptr && n->nt != NodeType::Ret);
 
+    if(n == nullptr && !p.err())
+        std::cout << "Reached end of input file" << std::endl;
+    if(p.err())
+        printd(p.error);
+
     SCOPE_NODE->pop();
-
-    if(p.err()) printd(p.error);
-
     node::print_tree(START_NODE);
 }
