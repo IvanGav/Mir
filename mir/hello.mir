@@ -12,7 +12,8 @@ let c: i64 = 0;
 };
 
 if(1+2) {
-    a = 100 + arg;
+    let temp: i64 = 50;
+    a = temp + temp + arg;
 } else {
     a = 1000 + arg;
 };
