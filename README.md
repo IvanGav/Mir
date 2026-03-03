@@ -1,8 +1,14 @@
 # Mir
 
-## Compiling
+## Compiling/Running
 
-`make`
+- Compile: `make`
+  - `make good` to enable optimizations and exclude debug flags
+- Run: `./a.out [src file]`
+  - If no source file is specified, default is `mir/hello.mir`
+  - `graph.gv` will automatically be generated, representing the graph of the program
+- Render abstract syntax graph: `dot -Tpng -O graph.gv`
+  - Install `dot` with `sudo apt install graphviz`
 
 ## Code hierarchy
 
@@ -11,6 +17,7 @@
 - `lang` - defines some language structures without any parsing or anything
 - `token` - lexer/tokenizer breaks up source code into tokens
 - `son` - parser into sea of nodes ast
+- `compile` - contains different compilation targets (current: `dot`)
 
 ## Features (planned, and may be completely changed)
 

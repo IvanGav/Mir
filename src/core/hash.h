@@ -39,7 +39,8 @@ namespace hash {
 
     template <PointerConcept T>
     u64 from(T s) {
-        return s->hash();
+        // return s->hash();
+        return (u64)(s); // simply cast the pointer to an int
     }
 
     template <typename T>

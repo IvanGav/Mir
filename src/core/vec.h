@@ -55,10 +55,19 @@ struct Vec {
         return size == 0;
     }
 
-    void push(T& e) {
+    void push(T const&& e) {
         if(size == capacity) {
-            if(capacity == 0) reserve(8);
-            else reserve(capacity*2);
+            if(capacity == 0) this->reserve(8);
+            else this->reserve(capacity*2);
+        }
+        data[size] = e;
+        size++;
+    }
+
+    void push(T const& e) {
+        if(size == capacity) {
+            if(capacity == 0) this->reserve(8);
+            else this->reserve(capacity*2);
         }
         data[size] = e;
         size++;
@@ -68,6 +77,15 @@ struct Vec {
         assert(size > 0);
         size--;
         return data[size];
+    }
+
+    void push_slice(Slice<T> s) {
+        if(next_power_of_two(this->size + s.size) < this->capacity)
+            this->reserve(next_power_of_two(this->size + s.size));
+        
+        for(usize i = 0; i < s.size; i++) {
+            this->push(s[i]);
+        }
     }
 
     /* Access Member Functions */

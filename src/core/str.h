@@ -53,9 +53,14 @@ namespace str {
     template <typename T>
     Str from_int(T num, mem::Arena& arena = default_arena) {
         Vec<u8> v {.arena = &arena};
-        while (num > 0) { v.push(num % 10 + '0'); num /= 10; }
+        // special case
+        if(num == 0) {
+            v.push('0');
+            return v.full_slice();
+        }
+        while (num > 0) { v.push(ref((u8)(num % 10 + '0'))); num /= 10; }
         v.reverse();
-        return v.slice(0,v.size);
+        return v.full_slice();
     }
 
     template <typename T>

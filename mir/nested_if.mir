@@ -1,0 +1,15 @@
+let a: u64 = 1;
+let b: u64 = 2;
+
+if(arg) {
+    b = 3;
+} else {
+    b = 4;
+    if(arg) {
+        a = 5;
+    } else {
+        a = 6;
+    };
+};
+
+return a + b;

@@ -7,9 +7,16 @@
 
 #include "son/parser.h"
 
+#include "compile/dot.h"
+
 Str readFile(const char* path, mem::Arena& arena = default_arena) {
     std::ifstream infile(path);
     return str::clone_cstr(std::string(std::istreambuf_iterator<char>(infile), std::istreambuf_iterator<char>()).data(), arena);
+}
+
+void writeFile(const char* path, Str content) {
+    std::ofstream outfile(path);
+    outfile << content;
 }
 
 int main(int argc, char* argv[]) {
@@ -43,4 +50,7 @@ int main(int argc, char* argv[]) {
 
     SCOPE_NODE->pop();
     node::print_tree(START_NODE);
+
+    Str dot = compile::dot(START_NODE);
+    writeFile("./graph.gv", dot);
 }

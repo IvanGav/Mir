@@ -96,3 +96,83 @@ std::ostream& operator<<(std::ostream& os, Type* t) {
     }
     unreachable;
 }
+
+namespace type {
+    Str to_str(TypeI ti) {
+        switch (ti) {
+            case TypeI::Top:    return "Top"_s;
+            case TypeI::Known:  return "Known"_s;
+            case TypeI::Bottom: return "Bottom"_s;
+        }
+        unreachable;
+    }
+
+    Str to_str(TypeT tt) {
+        switch (tt) {
+            case TypeT::Pure:   return "Pure"_s;
+            case TypeT::Ctrl:   return "Crtl"_s;
+            case TypeT::Bool:   return "Bool"_s;
+            case TypeT::Int:    return "Int"_s;
+            case TypeT::Float:  return "Float"_s;
+            case TypeT::Tuple:  return "Tuple"_s;
+        }
+        unreachable;
+    }
+    Str to_str(Type* t) {
+        assert(t != nullptr);
+        switch (t->ttype) {
+            case TypeT::Pure: {
+                return type::to_str(t->tinfo);
+            }
+            
+            case TypeT::Ctrl: {
+                return "Ctrl"_s; // no xctrl yet
+            }
+
+            case TypeT::Bool: {
+                TypeInt* ty = reinterpret_cast<TypeInt*>(t);
+                if(ty->self.tinfo == TypeI::Top) 
+                    return "Bool:Top"_s;
+                else if(ty->self.tinfo == TypeI::Bottom) 
+                    return "Bool:Bottom"_s;
+                else if(ty->val_min == 0 && ty->val_max == 0)
+                    return "false"_s;
+                else if(ty->val_min == 1 && ty->val_max == 1)
+                    return "true"_s;
+                else if(ty->val_min == 0 && ty->val_max == 1)
+                    return "Bool:any"_s;
+                else
+                    panic;
+            }
+            case TypeT::Int: {
+                TypeInt* ty = reinterpret_cast<TypeInt*>(t);
+                if(ty->self.tinfo == TypeI::Top) 
+                    return "Int:Top"_s;
+                else if(ty->self.tinfo == TypeI::Bottom) 
+                    return "Int:Bottom"_s;
+                else if(ty->val_min == ty->val_max)
+                    return str::from_slice_of_str(ref(Vec<Str>::with("Int:"_s, str::from_int(ty->val_min)).full_slice()));
+                else
+                    return str::from_slice_of_str(ref(Vec<Str>::with("Int:"_s, str::from_int(ty->val_min), "..="_s, str::from_int(ty->val_max)).full_slice()));
+            }
+
+            case TypeT::Float: {
+                TypeFloat* ty = reinterpret_cast<TypeFloat*>(t);
+                if(ty->self.tinfo == TypeI::Top) 
+                    return "Float:Top"_s;
+                else if(ty->self.tinfo == TypeI::Bottom) 
+                    return "Float:Bottom"_s;
+                else if(ty->val_min == ty->val_max)
+                    return str::from_slice_of_str(ref(Vec<Str>::with("Float:"_s, "UNIMPLEMENTED"_s).full_slice()));
+                else
+                    return str::from_slice_of_str(ref(Vec<Str>::with("Float:"_s, "UNIMPLEMENTED"_s, "..="_s, "UNIMPLEMENTED"_s).full_slice()));
+            }
+
+            case TypeT::Tuple: {
+                TypeTuple* ty = reinterpret_cast<TypeTuple*>(t);
+                return "Tuple TODO"_s;
+            }
+        }
+        unreachable;
+    }
+};

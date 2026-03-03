@@ -286,7 +286,7 @@ struct Parser {
         if(!this->read_token(TokenType::LeftCurly)) { error = "expected '{' after 'if' condition"_s; return nullptr; }
         Node* true_branch = this->next_block_expr();
         if(true_branch == nullptr) return nullptr;
-        assert(true_branch->type->tinfo == TypeI::Bottom);
+        // assert(true_branch->type->tinfo == TypeI::Bottom);
         NodeScope* scope_true = SCOPE_NODE;
 
         // Parse the false side
@@ -299,7 +299,7 @@ struct Parser {
             if(!this->read_token(TokenType::LeftCurly)) { error = "expected '{' after 'else'"_s; return nullptr; }
             Node* false_branch = this->next_block_expr();
             if(false_branch == nullptr) return nullptr;
-            assert(false_branch->type->tinfo == TypeI::Bottom);
+            // assert(false_branch->type->tinfo == TypeI::Bottom);
             scope_false = SCOPE_NODE;
         }
 

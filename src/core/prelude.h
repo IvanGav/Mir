@@ -32,7 +32,7 @@ typedef double f64;
 #define I8_MAX 0x7F
 #define I16_MAX 0x7FFF
 #define I32_MAX 0x7FFFFFFF
-#define I64_MAX 0x7FFFFFFFFFFFFFFFULL
+#define I64_MAX 0x7FFFFFFFFFFFFFFFLL
 #define I8_MIN i8(0x80)
 #define I16_MIN i16(0x8000)
 #define I32_MIN i32(0x80000000)

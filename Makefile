@@ -3,3 +3,6 @@ dev: src/.
 
 good: src/.
 	g++ src/main.cpp -std=c++20 -O3 -Wall
+
+clean:
+	rm a.out main rm graph.gv

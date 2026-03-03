@@ -188,6 +188,7 @@ struct NodeRegion {
 
     // Getters
     Node* ctrl(u32 index) { return self.input[index]; }
+    u32 ctrl_size() { return self.input.size; }
 };
 
 struct NodePhi {
