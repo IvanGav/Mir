@@ -91,7 +91,6 @@ struct Vec {
     /* Access Member Functions */
 
     T const& operator[](usize i) const {
-        assert(i >= 0);
         assert(i < size);
         return data[i];
     }
@@ -107,7 +106,6 @@ struct Vec {
     }
 
     T& operator[](usize i) {
-        assert(i >= 0);
         assert(i < size);
         return data[i];
     }

@@ -1,0 +1,17 @@
+#let t: u64 = 0;
+#if (arg) {
+#    t = arg;
+#    arg = arg + 1;
+#    t = t + arg;
+#};
+#return t;
+
+arg=arg+arg;
+arg=arg+arg;
+arg=arg+arg;
+arg=arg+arg;
+arg=arg+arg;
+arg=arg+arg;
+arg=3*arg;
+arg=arg+arg;
+return arg;

@@ -4,5 +4,8 @@ dev: src/.
 good: src/.
 	g++ src/main.cpp -std=c++20 -O3 -Wall
 
+graph:
+	dot -Tpng -O graph.gv
+
 clean:
-	rm a.out main rm graph.gv
+	rm a.out main graph.gv

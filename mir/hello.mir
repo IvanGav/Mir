@@ -18,4 +18,4 @@ if(1+2) {
     a = 1000 + arg;
 };
 
-return a + c + arg + b;
+return (a + c + arg) * b;

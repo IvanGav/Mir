@@ -89,7 +89,7 @@ struct NodeBinOp {
         return node::peephole(ptr);
     }
     static Node* from_token(Node* lhs, Node* rhs, Token t) {
-        return NodeBinOp::create(op::from_str(t.val), lhs, rhs, t);
+        return NodeBinOp::create(op::binary(t.val), lhs, rhs, t);
     }
 
     // Getters
@@ -119,6 +119,9 @@ struct NodeUnOp {
         Node* ptr = (Node*) Node::node_arena->push(node);
         ptr->push_inputs(rhs);
         return node::peephole(ptr);
+    }
+    static Node* from_token(Node* rhs, Token t) {
+        return NodeUnOp::create(op::unary(t.val), rhs, t);
     }
 
     // Getters

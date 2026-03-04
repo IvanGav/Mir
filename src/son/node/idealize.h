@@ -150,6 +150,20 @@ namespace node {
                     return n;
                 }
 
+                // TODO maybe not? Overflow issues?
+                // convert (arg * 2) * 3 into arg * 6
+                if(lhs->nt == NodeType::Mul && (
+                    rhs->nt == NodeType::Const &&
+                    ((NodeBinOp*)lhs)->rhs()->nt == NodeType::Const
+                )) {
+                    Node* i1 = rhs;
+                    Node* i2 = ((NodeBinOp*)lhs)->rhs();
+                    Node* new_lhs = ((NodeBinOp*)lhs)->lhs();
+                    Node* mul = NodeBinOp::create(Op::Mul, i1, i2);
+                    Node* self = NodeBinOp::create(Op::Mul, new_lhs, mul);
+                    return self;
+                }
+
                 return nullptr;
             }
 
