@@ -1,3 +1,5 @@
+# This is not good Makefile practice. I'm aware. It's a personal project with only me being a contributor.
+
 dev: src/.
 	g++ src/main.cpp -std=c++20 -O0 -g -Wall
 
