@@ -9,9 +9,32 @@ bool should_swap(Node* left, Node* right) {
 }
 
 namespace node {
-    Node* peephole(Node* n); // FORWARD DECL
+    // Nullable; When nullptr is returned, no progress/change has been made
+    Node* replace_with_const(Node* n) {
+        switch(n->nt) {
+            case NodeType::Const:
+            case NodeType::Start:
+            // case NodeType::Stop:
+            case NodeType::Ret:
+            case NodeType::Scope:
+                return nullptr;
+            
+            default:
+                break;
+        }
+
+        if(type::constant(n->type)) {
+            return NodeConst::create(n->type, START_NODE);
+        } else {
+            return nullptr;
+        }
+    }
+
     // Nullable; When nullptr is returned, no progress/change has been made
     Node* idealize(Node* n) {
+        Node* const_replace = node::replace_with_const(n);
+        if(const_replace != nullptr) return const_replace;
+        
         switch(n->nt) {
             case NodeType::Scope:
             case NodeType::Start:

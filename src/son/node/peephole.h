@@ -7,52 +7,22 @@
 namespace node {
     Node* peephole(Node* n) {
         assert(n != nullptr);
+        assert(n->nt != NodeType::Undefined);
         n->type = node::compute(n); // compute n's best known type
 
-        switch(n->nt) {
-            case NodeType::Scope:
-            case NodeType::Start:
-            case NodeType::Ret:
-                return n;
-            
-            case NodeType::Const:
-                return n;
-            
-            case NodeType::Proj: // TODO make sure that's right
-            case NodeType::If: // TODO make sure that's right
-            case NodeType::Region: // TODO make sure that's right
-            case NodeType::Phi: // TODO make sure that's right
-            case NodeType::Add:
-            case NodeType::Sub:
-            case NodeType::Mul:
-            case NodeType::Div:
-            case NodeType::Mod:
-            case NodeType::Neg: {
-                if(type::constant(n->type)) {
-                    Node* replacement = NodeConst::create(n->type, START_NODE);
-                    n->kill();
-                    return replacement;
-                }
-                // I have up to 3 nodes and all but 1 need to die
-                // n     <- original  ->    this
-                // ideal <- idealized ->    n
-                // best  <- peepholed ->    m (inside of deadCodeElim)
-                Node* ideal = node::idealize(n);
-                if(ideal != nullptr) {
-                    Node* best = node::peephole(ideal); // TODO WHAT'S THE POINT OF ***NOT*** PEEPHOLING INSIDE OF IDEALIZE WTH???
-                    if(n != best && n->unused()) {
-                        // TODO do i need to best.keep() and best.unkeep()???
-                        n->kill();
-                    }
-                    return best;
-                }
-                return n;
-            }
-            
-            case NodeType::Undefined:
-                printe("call peephole on undefined node", n);
-                panic;
+        Node* idealized = node::idealize(n);
+        
+        // no better representation
+        if(idealized == nullptr) {
+            return n;
         }
-        unreachable;
+
+        // better representation found
+        // Note that some peepholes modify inputs of a node, but leave the input node `n` valid and return it
+        if(n != idealized && n->unused()) {
+            // TODO do I need idealized.keep() and idealized.unkeep()??
+            n->kill();
+        }
+        return idealized;
     }
 }
