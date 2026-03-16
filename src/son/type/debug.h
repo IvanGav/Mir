@@ -169,7 +169,7 @@ namespace type {
             }
 
             case TypeT::Tuple: {
-                TypeTuple* ty = reinterpret_cast<TypeTuple*>(t);
+                // TypeTuple* ty = reinterpret_cast<TypeTuple*>(t);
                 return "Tuple TODO"_s;
             }
         }

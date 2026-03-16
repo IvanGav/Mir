@@ -1,21 +1,11 @@
-# a test code that will accumulate features as I implement them
-
-let a: i64 = 1;
-let b: i64 = 2;
-let c: i64 = 0;
-{
-    let b: i64 = 10;
-    a = 5;
-    {
-        c = a + b;
+let sum: u64 = 0;
+let i: u64 = 0;
+while(i / arg) {
+    i = i + 1;
+    let j: u64 = 0;
+    while(j / arg) {
+        sum = sum + j;
+        j = j + 1;
     };
 };
-
-if(1+2) {
-    let temp: i64 = 50;
-    a = temp + temp + arg;
-} else {
-    a = 1000 + arg;
-};
-
-return (a + c + arg) * b;
+return sum;

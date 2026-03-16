@@ -3,6 +3,9 @@ let b: u64 = 2;
 
 if(arg) {
     b = 3;
+    if(arg + 5) {
+        return 123;
+    };
 } else {
     b = 4;
     if(arg) {

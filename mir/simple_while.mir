@@ -1,0 +1,5 @@
+while(arg + 10) {
+    arg = arg + 1;
+};
+
+return arg;

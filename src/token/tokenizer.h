@@ -8,7 +8,7 @@
 enum class TokenType {
     Undefined, EndOfFile, EndOfLine, Comma, // special identifiers
     IntLiteral, FloatLiteral, StringLiteral, // literals
-    If, Else, While, VarDecl, FunctionDecl, Return, // keywords (respective): `if`, `else`, `while`, `let`, `fn`, `return`
+    If, Else, While, VarDecl, FunctionDecl, Return, Break, Continue, // keywords (respective): `if`, `else`, `while`, `let`, `fn`, `return`, `break`, `continue`
     LeftParenthese, RightParenthese, LeftBracket, RightBracket, LeftCurly, RightCurly, // brackets of all kinds
     Identifier, DataType, Special, // other
 };
@@ -222,6 +222,8 @@ struct Tokenizer {
             if(token_val == "let"_s) return Token { token_val, TokenType::VarDecl };
             if(token_val == "fn"_s) return Token { token_val, TokenType::FunctionDecl };
             if(token_val == "return"_s) return Token { token_val, TokenType::Return };
+            if(token_val == "break"_s) return Token { token_val, TokenType::Break };
+            if(token_val == "continue"_s) return Token { token_val, TokenType::Continue };
             return Token { token_val, TokenType::Identifier }; // generic identifier
         }
         // assume an operator
@@ -248,6 +250,8 @@ Str to_str(TokenType tt) {
         case TokenType::VarDecl:            return "VarDecl"_s;
         case TokenType::FunctionDecl:       return "FunctionDecl"_s;
         case TokenType::Return:             return "Return"_s;
+        case TokenType::Break:              return "Break"_s;
+        case TokenType::Continue:           return "Continue"_s;
 
         case TokenType::LeftParenthese:     return "LeftParenthese"_s;
         case TokenType::RightParenthese:    return "RightParenthese"_s;

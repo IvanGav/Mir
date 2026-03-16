@@ -39,11 +39,15 @@ namespace node {
             case NodeType::Scope:
             case NodeType::Start:
             case NodeType::If:
-            case NodeType::Region:
             case NodeType::Ret:
             case NodeType::Proj:
             case NodeType::Const:
+            return nullptr;
+
+            case NodeType::Region: {
                 return nullptr;
+            }
+
 
             case NodeType::Phi: {
                 NodePhi* node = (NodePhi*) n;

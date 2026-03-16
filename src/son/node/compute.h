@@ -33,7 +33,13 @@ namespace node {
             }
 
             case NodeType::Phi: {
-                return type::pool.bottom(); // TODO why?
+                NodePhi* node = (NodePhi*)(n);
+                if(node->region()->nt != NodeType::Region || ((NodeRegion*) (node->region()))->incomplete())
+                    return type::pool.bottom();
+                Type* t = type::pool.top();
+                for(u32 i = 0; i < node->data_size(); i++)
+                    t = type::meet(t, node->data(i)->type);
+                return t;
             }
 
             case NodeType::Start: {

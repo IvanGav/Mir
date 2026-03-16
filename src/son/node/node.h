@@ -174,7 +174,7 @@ struct NodeIf {
 
 // Control merge
 struct NodeRegion {
-    // self.input = [ctrl, ctrl2, ...]
+    // self.input = [ctrl1, ctrl2, ...]
     Node self;
 
     // Constructors
@@ -188,10 +188,32 @@ struct NodeRegion {
         ptr->push_inputs(ctrl1, ctrl2);
         return node::peephole(ptr);
     }
+    static Node* create_incomplete(Node* ctrl1) {
+        assert(ctrl1 != nullptr);
+        NodeRegion node = { 
+            .self = Node::create(NodeType::Region)
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl1, nullptr);
+        return node::peephole(ptr);
+    }
 
     // Getters
     Node* ctrl(u32 index) { return self.input[index]; }
     u32 ctrl_size() { return self.input.size; }
+    // void set_ctrl(u32 index, Node* new_ctrl) { self.set_input(index, new_ctrl); }
+
+    // If this region node was incomplete (aka loop in parsing), complete it by providing it the back-edge (true proj)
+    void complete(Node* new_ctrl) {
+        assert(this->ctrl(this->ctrl_size()-1) == nullptr);
+        self.set_input(this->ctrl_size()-1, new_ctrl);
+    }
+    
+    // Other helpers
+    // return true if not yet constructed fully
+    bool incomplete() {
+        return this->ctrl(this->ctrl_size()-1) == nullptr;
+    }
 };
 
 struct NodePhi {
@@ -221,12 +243,34 @@ struct NodePhi {
         }
         return node::peephole(ptr);
     }
+    static Node* create_incomplete(Node* ctrl, Node* data1) {
+        assert(ctrl != nullptr);
+        NodePhi node = { 
+            .self = Node::create(NodeType::Phi)
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl, data1, nullptr);
+        return node::peephole(ptr);
+    }
 
     // Getters
     Node* region() { return self.input[0]; }
     // 0-indexed
     Node* data(u32 index) { return self.input[index+1]; }
     u32 data_size() { return self.input.size-1; }
+    void set_data(u32 index, Node* new_data) {
+        self.set_input(index+1, new_data);
+    }
+    // complete with the given data node
+    void complete(Node* data2) {
+        assert(this->self.input[2] == nullptr);
+        this->self.set_input(2, data2);
+    }
+    // return true if not yet constructed fully
+    bool incomplete() {
+        return this->data(this->data_size()-1) == nullptr;
+    }
+    // return true if all data nodes' `node->nt` have the same value
     bool all_same() {
         NodeType nt = this->data(0)->nt;
         for(u32 i = 1; i < this->data_size(); i++) {
@@ -242,6 +286,7 @@ struct NodeStop {
 
 struct NodeScope {
     // self.input = [ctrl, ...]
+    // note, self.input[i>0] can be NodeScope*; in that case it's a "sentinel"; read `# Explain` in README.md
     Node self;
     VariableScope<usize> scope; // holds var_name -> index in self.input
 
@@ -255,32 +300,43 @@ struct NodeScope {
     }
 
     // Getters
-    Node* ctrl() { return self.input[0]; }
+    Node* ctrl() { assert(self.input.size > 0); return self.input[0]; }
 
     // Methods
     NodeScope* duplicate() {
-        NodeScope* dup = NodeScope::create(*scope.scopes.arena, nullptr);
-
-        // Our goals are:
-        // 1) duplicate the name bindings of the ScopeNode across all stack levels
-        // 2) Make the new ScopeNode a user of all the nodes bound
-        // 3) Ensure that the order of defs is the same to allow easy merging
-        
+        NodeScope* dup = NodeScope::create(*scope.scopes.arena, this->ctrl());
+        // Our goals are:  1) duplicate the name bindings of the ScopeNode across all stack levels  2) Make the new ScopeNode a user of all the nodes bound  3) Ensure that the order of defs is the same to allow easy merging
         dup->scope = scope.deep_clone();
         for(u32 i = 1; i < self.input.size; i++) {
             dup->self.push_input(self.input[i]);
         }
         return dup;
     }
+    // the duplocated NodeScope will have all of the bindings pointing to a different scope that has the actual value
+    NodeScope* duplicate_with_sentinel() {
+        NodeScope* dup = NodeScope::create(*scope.scopes.arena, this->ctrl());
+        // Our goals are:  1) duplicate the name bindings of the ScopeNode across all stack levels  2) Make the new ScopeNode a user of all the nodes bound  3) Ensure that the order of defs is the same to allow easy merging
+        dup->scope = scope.deep_clone();
+        for(u32 i = 1; i < self.input.size; i++) {
+            dup->self.push_input((Node*)this);
+        }
+        return dup;
+    }
 
     // Return the NodeRegion that connects
+    // note, kills the `other` scope and transforms the given scope
+    // note, if either scope has more layers, bring it down to the smallest of the two
     Node* merge(NodeScope* other) {
-        this->update(CTRL_STR, NodeRegion::create(this->ctrl(), other->ctrl()));
+        while(self.input.size > other->self.input.size) { this->pop(); }
+        assert(self.input.size == other->self.input.size);
+        this->update_ctrl(NodeRegion::create(this->ctrl(), other->ctrl()));
         Node* region = this->ctrl();
         // Note that we skip i==0, which is bound to '$ctrl'
         for(u32 i = 1; i < self.input.size; i++) {
             if(self.input[i] != other->self.input[i]) {
-                self.set_input(i, NodePhi::create(region, self.input[i], other->self.input[i]));
+                Node* data1 = this->resolve_sentinel(i); //self.input[i];
+                Node* data2 = other->resolve_sentinel(i); //other->self.input[i];
+                self.set_input(i, NodePhi::create(region, data1, data2));
             }
         }
         ((Node*)other)->kill();
@@ -289,22 +345,96 @@ struct NodeScope {
 
     void push() { scope.push(); }
     void pop() { self.pop_inputs(scope.top_size()); scope.pop(); }
+
     // If doesn't exist, return nullptr
-    Node* find(Str var_name) { if(!scope.contains(var_name)) return nullptr; return self.input[scope[var_name]]; }
+    Node* find(Str var_name) {
+        if(!scope.contains(var_name)) return nullptr;
+        u32 index = (u32) scope[var_name];
+        // if a sentinel, resolve it
+        // A lazy phi needs to be created on first lookup; explained in README.md `# Explain`
+        Node* val = this->resolve_sentinel(index);
+        return val;
+    }
     Node* update(Str var_name, Node* new_value) {
+        assert(var_name != CTRL_STR);
         if(!scope.contains(var_name)) { return nullptr; }
         usize var_index = scope[var_name];
+        // Node* _node = this->resolve_sentinel(var_index); // TODO not necessary; delete
         self.set_input(var_index, new_value);
         return new_value;
     }
     // TODO if shadowing, remove the old value I think
     Node* define(Str var_name, Node* new_value) {
+        // no need to `resolve_sentinel` since can only define or redefine in the top scope = cannot encounter a sentinel
+        // assert(var_name != CTRL_STR);
         scope.define(var_name, self.input.size);
         self.push_input(new_value);
         return new_value;
     }
+    Node* update_ctrl(Node* new_value) {
+        self.set_input(0, new_value);
+        return new_value;
+    }
+
+    // if this->self.input[i] is a sentinel (points to a ScopeNode), insert a lazy phi in that scope and return the newly created phi
+    // else return the current value
+    Node* resolve_sentinel(u32 i) {
+        Node* old = self.input[i];
+        if(old->nt != NodeType::Scope) return old; // not a sentinel; do nothing
+        NodeScope* sentinel = (NodeScope*)old;
+        Node* maybe_phi = sentinel->self.input[i]; // TODO maybe do resolve_sentinel here??? I don't think so, but maybe
+        Node* phi; // to be assigned
+        if(maybe_phi->nt == NodeType::Phi && sentinel->ctrl() == ((NodePhi*)maybe_phi)->region()) {
+            // lazy phi was already created
+            phi = sentinel->self.input[i];
+        } else {
+            // create lazy phi
+            // TODO check if correct because I have a feeling like it's not-quite-correct and will cause me 21 headaches
+            phi = NodePhi::create_incomplete(sentinel->ctrl(), sentinel->resolve_sentinel(i));
+            sentinel->self.set_input(i, phi);
+        }
+        self.set_input(i, phi);
+        return phi;
+    }
+
+    // Merge the backedge scope into this loop head scope
+    // We set the second input to the phi from the back edge (loop body)
+    // `this` = original, untouched scope; must be the sentinel for both other scopes
+    // `back` = "continue" scope (killed after the function returns)
+    // `exit` = "break" scope
+    void end_loop(NodeScope* back, NodeScope* exit) {
+        NodeRegion* cur_ctrl = (NodeRegion*)this->ctrl(); // technically unsafe
+        assert(cur_ctrl->self.nt == NodeType::Region && cur_ctrl->incomplete());
+        cur_ctrl->complete(back->ctrl());
+        for(u32 i = 1; i < self.input.size; i++) {
+            if(back->self.input[i] != (Node*)this) {
+                // will be a lazy phi
+                NodePhi* phi = (NodePhi*)self.input[i]; // technically might be unsafe, but should always be true
+                assert(phi->self.nt == NodeType::Phi);
+                assert(phi->region() == (Node*)cur_ctrl && phi->incomplete());
+                phi->complete(back->self.input[i]);
+            }
+            if(exit->self.input[i] == (Node*)this) // Replace a lazy-phi on the exit path too
+                exit->self.set_input(i, self.input[i]);
+        }
+        back->self.kill(); // Loop backedge is dead
+
+        // Now one-time do a useless phi removal
+        for(u32 i = 1; i < self.input.size; i++) {
+            if(self.input[i]->nt == NodeType::Phi) {
+                Node* phi = self.input[i];
+                Node* in = node::peephole(phi);
+                if(in != phi) {
+                    phi->subsume(in);
+                    self.set_input(i, in); // Set the update back into Scope
+                    // TODO uhh, what about the `exit` scope?
+                }
+            }
+        }
+    }
 };
 
-// TODO remove this crutch
 Node* START_NODE;
 NodeScope* SCOPE_NODE;
+NodeScope* BREAK_SCOPE_NODE;
+NodeScope* CONTINUE_SCOPE_NODE;

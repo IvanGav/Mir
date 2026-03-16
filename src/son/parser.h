@@ -117,10 +117,14 @@ struct Parser {
     }
 
     // Top level expression can be one of:
-    // `return <expr>;`
-    // `let <name>: <type> = <expr>;
-    // `<name> = <expr>;
-    // `{ ... };`
+    // - `return <expr>;`
+    // - `let <name>: <type> = <expr>;`
+    // - `<name> = <expr>;`
+    // - `{ ... };`
+    // - `if(...) {...} ... ;`
+    // - `while(...) {...};`
+    // - `break;` when inside of a loop
+    // - `continue;` when inside of a loop
     // `nullptr` means that source has been fully parsed or an error occurred
     // does consume the tailing `;`
     Node* next_top_level_expr() {
@@ -168,6 +172,27 @@ struct Parser {
                 if(if_expr == nullptr) return nullptr;
                 if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
                 return if_expr;
+            }
+
+            case TokenType::While: {
+                Node* while_expr = this->next_while(token);
+                if(while_expr == nullptr) return nullptr;
+                if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
+                return while_expr;
+            }
+
+            case TokenType::Break: {
+                this->apply_break();
+                if(this->err()) return nullptr;
+                if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
+                return (Node*) BREAK_SCOPE_NODE;
+            }
+
+            case TokenType::Continue: {
+                this->apply_continue();
+                if(this->err()) return nullptr;
+                if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
+                return (Node*) CONTINUE_SCOPE_NODE;
             }
 
             // skip empty expressions
@@ -251,6 +276,7 @@ struct Parser {
 
     // Assume that the leading `{` has already been read
     // return the last expr value
+    // Consume the trailing `}`
     Node* next_block_expr() {
         SCOPE_NODE->push();
         Node* expr = nullptr;
@@ -265,6 +291,7 @@ struct Parser {
         return expr;
     }
 
+    // Assume that `if` has already been read and accept it as argument `token`
     Node* next_if(Token token) {
         if(!this->read_token(TokenType::LeftParenthese)) { error = "expected '(' after 'if'"_s; return nullptr; }
         Node* condition = this->next_primary_expr();
@@ -282,7 +309,7 @@ struct Parser {
 
         // Parse the true side
 
-        SCOPE_NODE->update(CTRL_STR, proj_true);
+        SCOPE_NODE->update_ctrl(proj_true);
         if(!this->read_token(TokenType::LeftCurly)) { error = "expected '{' after 'if' condition"_s; return nullptr; }
         Node* true_branch = this->next_block_expr();
         if(true_branch == nullptr) return nullptr;
@@ -292,7 +319,7 @@ struct Parser {
         // Parse the false side
 
         SCOPE_NODE = scope_false;
-        SCOPE_NODE->update(CTRL_STR, proj_false);
+        SCOPE_NODE->update_ctrl(proj_false);
         if(t.peek_non_white() != ';') {
             // there's an else clause
             if(!this->read_token(TokenType::Else)) { error = "expected 'else' clause"_s; return nullptr; }
@@ -306,7 +333,7 @@ struct Parser {
         assert(scope_true->self.input.size == scope_false->self.input.size);
 
         // Merge results
-        // SCOPE_NODE->update(CTRL_STR, scope_true->merge(scope_false)); // TODO erm, it's already getting updated in `NodeScope::merge`
+        // SCOPE_NODE->update_ctrl(scope_true->merge(scope_false)); // TODO erm, it's already getting updated in `NodeScope::merge`
         scope_true->merge(scope_false);
         SCOPE_NODE = scope_true;
 
@@ -330,5 +357,118 @@ struct Parser {
     bool read_token(Str val) {
         Token token = t.next_token();
         return token.val == val;
+    }
+
+    // assume that `while` has been read and passed as argument `while_token`
+    Node* next_while(Token while_token) {
+        NodeScope* save_break_scope = BREAK_SCOPE_NODE;
+        NodeScope* save_continue_scope = CONTINUE_SCOPE_NODE;
+
+        // note that loop_node->input[1] is nullptr until the loop is fully parsed
+        SCOPE_NODE->update_ctrl(NodeRegion::create_incomplete(SCOPE_NODE->ctrl()));
+        
+        // Save the current scope as the loop head; will be the sentinel for the body loops
+        NodeScope* head = SCOPE_NODE; // ->keep();
+        // Make SCOPE_NODE the loop body scope
+        SCOPE_NODE = head->duplicate_with_sentinel();
+
+        if(!this->read_token(TokenType::LeftParenthese)) { error = "Expected '(' after 'while'"_s; return nullptr; }
+        Node* condition = this->next_primary_expr();
+        if(!this->read_token(TokenType::RightParenthese)) { error = "Expected ')' after 'while' condition"_s; return nullptr; }
+        if(condition == nullptr) { return nullptr; }
+        Node* loop_cond_node = NodeIf::create(SCOPE_NODE->ctrl(), condition, while_token);
+        // loop_cond_node->keep();
+        Node* proj_t = NodeProj::create(0, loop_cond_node);
+        // loop_cond_node->unkeep();
+        Node* proj_f = NodeProj::create(1, loop_cond_node);
+
+        assert(!loop_cond_node->dead());
+
+        // Break scope has the false projection -> when while condition is false
+        // By default has same variables as before entering the loop body -> just duplicate the current scope
+        BREAK_SCOPE_NODE = SCOPE_NODE->duplicate();
+        BREAK_SCOPE_NODE->update_ctrl(proj_f);
+        CONTINUE_SCOPE_NODE = nullptr;
+
+        // Parse the true side = loop body
+        SCOPE_NODE->update_ctrl(proj_t);
+        if(!this->read_token(TokenType::LeftCurly)) { error = "Expected a block as 'while' body"_s; return nullptr; }
+        Node* block_ret = this->next_block_expr();
+        if(block_ret == nullptr) return nullptr;
+
+        // Merge the loop bottom into other continue statements
+        if (CONTINUE_SCOPE_NODE != nullptr) {
+            SCOPE_NODE->merge(CONTINUE_SCOPE_NODE); // TODO should be sufficient, right?
+            CONTINUE_SCOPE_NODE = nullptr; // no references to dead nodes
+        }
+
+        // The true branch loops back, so whatever is current _scope.ctrl gets
+        // added to head loop as input.  endLoop() updates the head scope, and
+        // goes through all the phis that were created earlier.  For each phi,
+        // it sets the second input to the corresponding input from the back
+        // edge.  If the phi is redundant, it is replaced by its sole input.
+        NodeScope* exit_scope = BREAK_SCOPE_NODE;
+
+        // connect the back edge
+        assert(!head->self.dead());
+        head->end_loop(SCOPE_NODE, exit_scope);
+        // head->unkeep();
+        head->self.kill();
+
+        // restore
+        CONTINUE_SCOPE_NODE = save_continue_scope;
+        BREAK_SCOPE_NODE = save_break_scope;
+
+        // At exit the false control is the current control, and
+        // the scope is the exit scope after the exit test.
+        SCOPE_NODE = exit_scope;
+        return (Node*) SCOPE_NODE;
+    }
+
+    // NodeScope* jump_to(NodeScope* to_scope) {
+    //     NodeScope* cur_scope = SCOPE_NODE->duplicate();
+    //     // ctrl(new ConstantNode(Type.XCONTROL).peephole()); // Kill current scope
+    //     SCOPE_NODE->self.kill();
+
+    //     // Prune nested lexical scopes that have depth > the loop head
+    //     // We use _breakScope as a proxy for the loop head scope to obtain the depth
+    //     while(cur_scope->scope.scopes.size > BREAK_SCOPE_NODE->scope.scopes.size )
+    //         cur_scope->pop();
+        
+    //     // If this is a continue then first time the target is null
+    //     // So we just use the pruned current scope as the base for the
+    //     // continue
+    //     if(to_scope == nullptr)
+    //         return cur_scope;
+
+    //     // toScope is either the break scope, or a scope that was created here
+    //     assert(to_scope->scope.scopes.size <= BREAK_SCOPE_NODE->scope.scopes.size);
+    //     to_scope->merge(cur_scope);
+    //     return to_scope;
+    // }
+
+    void apply_break() {
+        if(!this->is_loop_active()) {
+            error = "Cannot 'break' without an active loop"_s;
+            return;
+        }
+        BREAK_SCOPE_NODE->merge(SCOPE_NODE);
+        SCOPE_NODE = BREAK_SCOPE_NODE;
+    }
+    void apply_continue() {
+        if(!this->is_loop_active()) {
+            error = "Cannot 'continue' without an active loop"_s;
+            return;
+        }
+        if(CONTINUE_SCOPE_NODE == nullptr) {
+            CONTINUE_SCOPE_NODE = SCOPE_NODE;
+            return;
+        }
+        CONTINUE_SCOPE_NODE->merge(SCOPE_NODE);
+        SCOPE_NODE = CONTINUE_SCOPE_NODE;
+    }
+
+    bool is_loop_active() {
+        return BREAK_SCOPE_NODE != nullptr;
     }
 };

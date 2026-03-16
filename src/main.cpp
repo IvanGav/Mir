@@ -28,6 +28,7 @@ int main(int argc, char* argv[]) {
     START_NODE = NodeStart::create(Slice<Type*>::from_ptr(inputs, 2));
     SCOPE_NODE = (NodeScope*) NodeScope::create(scope_arena, NodeProj::create(0, START_NODE));
     SCOPE_NODE->define("arg"_s, NodeProj::create(1, START_NODE));
+    BREAK_SCOPE_NODE = CONTINUE_SCOPE_NODE = nullptr;
     
     Str src;
     if(argc > 1)

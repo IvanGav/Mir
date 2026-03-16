@@ -24,7 +24,7 @@ namespace node {
                 return false;
             
             case NodeType::Proj:
-                return ((NodeProj*)n)->index == 0; // TODO make sure there is no better way of doing this
+                return ((NodeProj*)n)->index == 0 || n->nt == NodeType::If; // TODO make sure there is no better way of doing this
             
             case NodeType::Undefined:
                 printe("call cfg on undefined node", n);

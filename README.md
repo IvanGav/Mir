@@ -106,3 +106,51 @@ if (!(this instanceof ConstantNode) && type.isConstant()) {
 }
 ```
 It's possible for `StartNode` to be killed, as some thing like `Start <- Const(10) <- OpNeg` will kill `OpNeg`, then `Const(10)` and then `Start`. Because it has no uses. But we're about to give it a use - `Const(-10)`. So that's strange. The problem is present in chapter 3 too, I think.
+
+# Explain
+## Lazy phi creation on variable lookup
+When parsing loops, the inner scope is created with 'sentinel' values for variables, meaning they point to the head scope.
+That is made so that when modifying a variable, a 'lazy phi' is created.
+When doing any variable lookup, a lazy phi needs to be created. Example:
+```
+x = 0
+while {
+  use(x)        // read x before any write in this iteration
+  if {
+    x = x + 1  // only sometimes updated
+  }
+  use(x)
+}
+```
+While using `x` for the first time, a lazy phi was not created yet, so it will forever point to the original value of `x` if a lazy phi is not created on the first lookup. Now, we don't know if `x` will ever change in the loop, but we still need to create a lazy phi. Because it's accessing, not assigning, that will use the lazy phi value.
+
+# Ramble ramble
+
+When parsing a loop:
+
+```
+initial_scope
+...
+break_scope {
+  while (...)
+  continue_scope {
+    if(...) {
+      a++;
+      continue;
+    }
+    if(...) {
+      a++;
+      break;
+    }
+  }
+}
+merge(initial_scope, break_scope.pop)
+```
+
+condition can have side effects and rebindings of names
+break scope = the active scope after `break` is called OR while naturally finishes
+continue scope = the active scope after `continue` is called OR while loop loops
+
+if no `break` or `continue` are present, *the scope from after the entire while body was parsed* is merged with the *scope 
+
+when `continue` is called, the current state of the scope will be merged with the next beginning of the loop scope

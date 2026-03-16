@@ -117,6 +117,8 @@ struct Node {
     void pop_inputs(usize n) {
         for(usize i = 0; i < n; i++) this->pop_input();
     }
+    // set given index in `this->input` to `new_input` and return `new_input`
+    // kill the previous node if it becomes unused
     Node* set_input(usize index, Node* new_input) {
         Node* old_input = input[index];
         if(old_input == new_input) return this; // No change
@@ -146,6 +148,18 @@ struct Node {
         // for(usize i = 0; i < input.size; i++) { this->set_input(i, nullptr); } input.clear();
         type = nullptr; // Flag as dead
         assert(this->dead());
+    }
+
+    // Replace self with `other` in the graph, making `this` go dead
+    void subsume(Node* other) {
+        assert(other != this);
+        while(output.size > 0) {
+            Node* n = output.pop();
+            u32 i = n->input.index_of(this);
+            n->input[i] = other;
+            other->output.push(n);
+        }
+        kill();
     }
 
     // helpers

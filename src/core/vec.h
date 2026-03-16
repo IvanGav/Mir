@@ -144,11 +144,35 @@ struct Vec {
     }
 
     // Remove a single element by value. Return true if something was deleted.
-    bool remove_first_of(T e) {
-        // find the first occurance of e
+    bool remove_first_of(T const& e) {
+        usize i = this->index_of(e);
+        if(i == size) return false;
+        this->remove(i);
+        return true;
+    }
+
+    // Remove a single element by value. Return true if something was deleted.
+    bool remove_first_of(T const&& e) {
+        usize i = this->index_of(e);
+        if(i == size) return false;
+        this->remove(i);
+        return true;
+    }
+
+    // Return the index of the first occurance of `e` or `size` if not found
+    usize index_of(T const& e) const {
         for(usize i = 0; i < size; i++) {
             if(data[i] == e) {
-                this->remove(i);
+                return i;
+            }
+        }
+        return size;
+    }
+
+    // Return true if this vector contains a given element
+    bool contains(T const& e) const {
+        for(usize i = 0; i < size; i++) {
+            if(data[i] == e) {
                 return true;
             }
         }

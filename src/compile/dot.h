@@ -160,6 +160,7 @@ namespace compile {
                 Str uid = str::from_int(n->uid);
                 Vec<Str> s = Vec<Str>::with();
                 for(u32 i = 0; i < node->ctrl_size(); i++) {
+                    if(node->ctrl(i) == nullptr) { continue; }
                     s.push(ref(str::from_int(node->ctrl(i)->uid)));
                     s.push(ref(" -> "_s));
                     s.push(ref(uid));
@@ -177,6 +178,7 @@ namespace compile {
                     ctrl_uid, " -> "_s, uid, " [style=dotted];\n"_s
                 );
                 for(u32 i = 0; i < node->data_size(); i++) {
+                    if(node->data(i) == nullptr) { continue; }
                     s.push(ref(str::from_int(node->data(i)->uid)));
                     s.push(ref(" -> "_s));
                     s.push(ref(uid));

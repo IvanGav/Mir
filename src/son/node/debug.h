@@ -49,7 +49,12 @@ std::ostream& operator<<(std::ostream& os, Node* n) {
         case NodeType::Region: {
             NodeRegion* node = (NodeRegion*) n;
             for(u32 i = 0; i < node->self.input.size; i++) {
-                os << "\tctrl" << i << " = " << node->ctrl(i)->uid << "\n";
+                os << "\tctrl" << i << " = ";
+                if(node->ctrl(i) == nullptr) {
+                    os << "incomplete" << "\n";
+                } else {
+                    os << node->ctrl(i)->uid << "\n";
+                }
             }
             return os;
         }
@@ -58,7 +63,12 @@ std::ostream& operator<<(std::ostream& os, Node* n) {
             NodePhi* node = (NodePhi*) n;
             os << "\tregion = " << node->region()->uid << "\n";
             for(u32 i = 0; i < node->data_size(); i++) {
-                os << "\tdata" << i << " = " << node->data(i)->uid << "\n";
+                os << "\tdata" << i << " = ";
+                if(node->data(i) == nullptr) {
+                    os << "incomplete" << "\n";
+                } else {
+                    os << node->data(i)->uid << "\n";
+                }
             }
             return os;
         }
