@@ -128,6 +128,17 @@ struct HMap {
         return map[index].exists();
     }
 
+    // linear lookup time
+    Maybe<K> key_of(V val) const {
+        for(u32 i = 0; i < map.size; i++) {
+            Entry const& e = map[i];
+            if(e.exists() && e.value == val) {
+                return { .val = e.key, .here = true };
+            }
+        }
+        return { .here = false };
+    }
+
     /* Cloning */
 
     // if `new_arena` is `nullptr`, use the same arena as `this`

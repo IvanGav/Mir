@@ -219,22 +219,25 @@ struct NodeRegion {
 struct NodePhi {
     // self.input = [region, input1, input2, ...]
     Node self;
+    Str debug_var_name;
 
     // Constructors
     // TODO make vararg
-    static Node* create(Node* ctrl, Node* data1, Node* data2) {
+    static Node* create(Str debug_var_name, Node* ctrl, Node* data1, Node* data2) {
         assert(ctrl != nullptr);
         NodePhi node = { 
-            .self = Node::create(NodeType::Phi)
+            .self = Node::create(NodeType::Phi),
+            .debug_var_name = debug_var_name
         };
         Node* ptr = (Node*) Node::node_arena->push(node);
         ptr->push_inputs(ctrl, data1, data2);
         return node::peephole(ptr);
     }
-    static Node* create(Node* ctrl, Slice<Node*> data_list) {
+    static Node* create(Str debug_var_name, Node* ctrl, Slice<Node*> data_list) {
         assert(ctrl != nullptr);
         NodePhi node = { 
-            .self = Node::create(NodeType::Phi)
+            .self = Node::create(NodeType::Phi),
+            .debug_var_name = debug_var_name
         };
         Node* ptr = (Node*) Node::node_arena->push(node);
         ptr->push_inputs(ctrl);
@@ -243,10 +246,11 @@ struct NodePhi {
         }
         return node::peephole(ptr);
     }
-    static Node* create_incomplete(Node* ctrl, Node* data1) {
+    static Node* create_incomplete(Str debug_var_name, Node* ctrl, Node* data1) {
         assert(ctrl != nullptr);
         NodePhi node = { 
-            .self = Node::create(NodeType::Phi)
+            .self = Node::create(NodeType::Phi),
+            .debug_var_name = debug_var_name
         };
         Node* ptr = (Node*) Node::node_arena->push(node);
         ptr->push_inputs(ctrl, data1, nullptr);
@@ -336,7 +340,7 @@ struct NodeScope {
             if(self.input[i] != other->self.input[i]) {
                 Node* data1 = this->resolve_sentinel(i); //self.input[i];
                 Node* data2 = other->resolve_sentinel(i); //other->self.input[i];
-                self.set_input(i, NodePhi::create(region, data1, data2));
+                self.set_input(i, NodePhi::create(scope.key_of(i), region, data1, data2));
             }
         }
         ((Node*)other)->kill();
@@ -389,8 +393,7 @@ struct NodeScope {
             phi = sentinel->self.input[i];
         } else {
             // create lazy phi
-            // TODO check if correct because I have a feeling like it's not-quite-correct and will cause me 21 headaches
-            phi = NodePhi::create_incomplete(sentinel->ctrl(), sentinel->resolve_sentinel(i));
+            phi = NodePhi::create_incomplete(scope.key_of(i), sentinel->ctrl(), sentinel->resolve_sentinel(i));
             sentinel->self.set_input(i, phi);
         }
         self.set_input(i, phi);

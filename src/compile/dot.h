@@ -66,8 +66,9 @@ namespace compile {
             }
 
             case NodeType::Phi: {
+                NodePhi* node = (NodePhi*) n;
                 Str uid = str::from_int(n->uid);
-                Vec<Str> s = Vec<Str>::with(uid, " [label=\"phi\"];\n"_s);
+                Vec<Str> s = Vec<Str>::with(uid, " [label=\"phi_"_s, node->debug_var_name, "\"];\n"_s);
                 output.push_slice(str::from_slice_of_str(ref(s.full_slice())));
                 break;
             }

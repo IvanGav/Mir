@@ -65,8 +65,8 @@ namespace node {
                         lhs_data.push(ref(((NodeBinOp*)node->data(i))->lhs()));
                         rhs_data.push(ref(((NodeBinOp*)node->data(i))->rhs()));
                     }
-                    Node* phi_lhs = NodePhi::create(node->region(), lhs_data.full_slice());
-                    Node* phi_rhs = NodePhi::create(node->region(), rhs_data.full_slice());
+                    Node* phi_lhs = NodePhi::create(node->debug_var_name, node->region(), lhs_data.full_slice());
+                    Node* phi_rhs = NodePhi::create(node->debug_var_name, node->region(), rhs_data.full_slice());
                     return NodeBinOp::create(((NodeBinOp*) node->data(0))->op, phi_lhs, phi_rhs);
                 }
 

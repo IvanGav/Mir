@@ -66,6 +66,17 @@ struct VariableScope {
         return scopes.back().size;
     }
 
+    // relatively expensive
+    Str key_of(T value) {
+        for(u32 i = scopes.size-1; i >= 0; i--) {
+            Maybe<Str> key = scopes[i].key_of(value);
+            if(key.here) {
+                return key.val;
+            }
+        }
+        panic;
+    }
+
     VariableScope<T> deep_clone() {
         VariableScope<T> c { .scopes = Vec<HMap<Str,T>>::create(*scopes.arena) };
         c.scopes = this->scopes.clone(scopes.arena);
