@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
         printd(p.error);
 
     SCOPE_NODE->pop();
-    node::print_tree(START_NODE);
+    // node::print_tree(START_NODE); // not very useful, when `dot` exists
 
     Str dot = compile::dot(START_NODE);
     writeFile("./graph.gv", dot);

@@ -17,7 +17,7 @@ struct VariableScope {
 
     // Push a new scope to be innermost
     void push() {
-        scopes.push(ref(HMap<Str,T>::empty(scopes.arena)));
+        scopes.push(ref(HMap<Str,T>::create(scopes.arena)));
     }
 
     // Pop the innermost scope

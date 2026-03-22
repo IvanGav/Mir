@@ -64,7 +64,7 @@ struct Node {
     NodeType nt;
     Maybe<Token> token;
     Vec<Node*> input; // use-def references; nullable, fixed length, ordered
-    Vec<Node*> output; // def-use references; nonull
+    Vec<Node*> output; // def-use references; can have null values only from calling `keep` and `unkeep` 
     Type* type; // best known type of this node; if null, this node is dead (for nonull for alive nodes)
 
     inline static u32 uid_counter = 0;
@@ -103,19 +103,32 @@ struct Node {
     }
     void push_input(Node* new_input) {
         input.push(new_input);
-        if(new_input != nullptr) new_input->output.push(ref(this));
+        if(new_input != nullptr) new_input->output.push(this);
     }
     void pop_input() {
         Node* last_input = input.pop();
         if(last_input != nullptr) {
             last_input->output.remove_first_of(this); // remove this from popped node's output
             // If we removed the last use, the old input is now dead
-            if(last_input->output.empty())
+            if(last_input->unused()) {
+                // TODO what the heck is going on here
+                // assert(last_input->nt != NodeType::Scope); // shouldn't remove scopes as part of DCE
                 last_input->kill();
+            }
         }
     }
     void pop_inputs(usize n) {
         for(usize i = 0; i < n; i++) this->pop_input();
+    }
+    void remove_input(Node* value) {
+        bool removed = input.remove_first_of(value);
+        assert(removed);
+        if(value != nullptr) {
+            value->output.remove_first_of(this); // remove this from popped node's output
+            // If we removed the last use, the old input is now dead
+            if(value->unused())
+                value->kill();
+        }
     }
     // set given index in `this->input` to `new_input` and return `new_input`
     // kill the previous node if it becomes unused
@@ -123,12 +136,12 @@ struct Node {
         Node* old_input = input[index];
         if(old_input == new_input) return this; // No change
         if(new_input != nullptr)
-            new_input->output.push(ref(this));
+            new_input->output.push(this);
         // If the old input exists, remove a def->use edge
         if(old_input != nullptr) {
             old_input->output.remove_first_of(this); // remove this from last node's output
             // If we removed the last use, the old input is now dead
-            if(old_input->output.empty())
+            if(old_input->unused())
                 old_input->kill();
         }
         // Set the new_def over the old (killed) edge
@@ -161,6 +174,12 @@ struct Node {
         }
         kill();
     }
+    
+    // helpters to stop DCE mid-parse
+    // Add bogus null use to keep node alive
+    void keep() { this->output.push(nullptr); }
+    // Remove bogus null.
+    void unkeep() { this->output.remove_first_of(nullptr); }
 
     // helpers
 

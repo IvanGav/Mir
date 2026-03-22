@@ -1,0 +1,10 @@
+while(arg / 10) {
+    arg = arg + 1;
+    #if (arg / 5) {
+    #    continue;
+    #};
+    if (arg / 6) {
+        break;
+    };
+};
+return arg;

@@ -9,6 +9,9 @@ namespace node {
     Node* peephole(Node*);
 };
 
+Node* VOID_NODE;
+Node* START_NODE;
+
 /* Specialized Nodes */
 
 // All nodes will have several static "constructors" and a `create` method that will take an object and put it into the node arena.
@@ -176,13 +179,15 @@ struct NodeIf {
 struct NodeRegion {
     // self.input = [ctrl1, ctrl2, ...]
     Node self;
+    bool loop;
 
     // Constructors
     static Node* create(Node* ctrl1, Node* ctrl2) {
         assert(ctrl1 != nullptr);
         assert(ctrl2 != nullptr);
         NodeRegion node = { 
-            .self = Node::create(NodeType::Region)
+            .self = Node::create(NodeType::Region),
+            .loop = false
         };
         Node* ptr = (Node*) Node::node_arena->push(node);
         ptr->push_inputs(ctrl1, ctrl2);
@@ -191,7 +196,8 @@ struct NodeRegion {
     static Node* create_incomplete(Node* ctrl1) {
         assert(ctrl1 != nullptr);
         NodeRegion node = { 
-            .self = Node::create(NodeType::Region)
+            .self = Node::create(NodeType::Region),
+            .loop = true
         };
         Node* ptr = (Node*) Node::node_arena->push(node);
         ptr->push_inputs(ctrl1, nullptr);
@@ -282,10 +288,19 @@ struct NodePhi {
         }
         return true;
     }
-};
-
-struct NodeStop {
-
+    // if all data inputs are the same, return the unique input; nullptr otherwise
+    Node* single_unique_input() {
+        // TODO if region has dead control, delete
+        Node* single = this->data(0);
+        for(u32 i = 1; i < this->data_size(); i++) {
+            // TODO check that this input is not dead (aka `this->region()->input[i]->type != type::pool.xctrl()`)
+            // don't count self as a unique input (for example if in a loop a var is accessed but not modified)
+            if(this->data(i) != (Node*)this) {
+                if(single != this->data(i)) return nullptr;
+            }
+        }
+        return single;
+    }
 };
 
 struct NodeScope {
@@ -298,16 +313,26 @@ struct NodeScope {
     static NodeScope* create(mem::Arena& arena, Node* ctrl) {
         NodeScope node = NodeScope { .self = Node::create(NodeType::Scope), .scope = VariableScope<usize>::create(arena) };
         NodeScope* ptr = Node::node_arena->push(node);
-        ptr->self.type = type::pool.bottom();
+        ptr->self.type = type::pool.ctrl(); // maybe has to be Pure:Bottom?
         ptr->define(CTRL_STR, ctrl);
+        return ptr;
+    }
+    // dead scopes accept any variable name lookup and return nothing (Pure:Bottom)
+    // dead scope's ctrl is self
+    static NodeScope* create_xctrl() {
+        NodeScope node = NodeScope { .self = Node::create(NodeType::Scope) };
+        NodeScope* ptr = Node::node_arena->push(node);
+        ptr->self.type = type::pool.xctrl();
         return ptr;
     }
 
     // Getters
     Node* ctrl() { assert(self.input.size > 0); return self.input[0]; }
+    bool is_xctrl() { return self.type == type::pool.xctrl(); }
 
     // Methods
     NodeScope* duplicate() {
+        if(this->is_xctrl()) { return NodeScope::create_xctrl(); }
         NodeScope* dup = NodeScope::create(*scope.scopes.arena, this->ctrl());
         // Our goals are:  1) duplicate the name bindings of the ScopeNode across all stack levels  2) Make the new ScopeNode a user of all the nodes bound  3) Ensure that the order of defs is the same to allow easy merging
         dup->scope = scope.deep_clone();
@@ -318,8 +343,8 @@ struct NodeScope {
     }
     // the duplocated NodeScope will have all of the bindings pointing to a different scope that has the actual value
     NodeScope* duplicate_with_sentinel() {
+        if(this->is_xctrl()) { return NodeScope::create_xctrl(); }
         NodeScope* dup = NodeScope::create(*scope.scopes.arena, this->ctrl());
-        // Our goals are:  1) duplicate the name bindings of the ScopeNode across all stack levels  2) Make the new ScopeNode a user of all the nodes bound  3) Ensure that the order of defs is the same to allow easy merging
         dup->scope = scope.deep_clone();
         for(u32 i = 1; i < self.input.size; i++) {
             dup->self.push_input((Node*)this);
@@ -327,31 +352,41 @@ struct NodeScope {
         return dup;
     }
 
-    // Return the NodeRegion that connects
-    // note, kills the `other` scope and transforms the given scope
+    // merges `other` into `this` and kills `other`
     // note, if either scope has more layers, bring it down to the smallest of the two
-    Node* merge(NodeScope* other) {
+    void merge(NodeScope* other) {
+        assert(!self.dead()); assert(!other->self.dead());
+        if(other->is_xctrl()) { return; }
+        if(this->is_xctrl()) {
+            self.kill();
+            *this = *other;
+            *other = { 0 };
+            return;
+        }
+        if(other == this) { return; }
+        printd(self.input.size);
+        printd(other->self.input.size);
         while(self.input.size > other->self.input.size) { this->pop(); }
-        assert(self.input.size == other->self.input.size);
         this->update_ctrl(NodeRegion::create(this->ctrl(), other->ctrl()));
         Node* region = this->ctrl();
         // Note that we skip i==0, which is bound to '$ctrl'
         for(u32 i = 1; i < self.input.size; i++) {
             if(self.input[i] != other->self.input[i]) {
-                Node* data1 = this->resolve_sentinel(i); //self.input[i];
-                Node* data2 = other->resolve_sentinel(i); //other->self.input[i];
+                Node* data1 = this->resolve_sentinel(i);
+                Node* data2 = other->resolve_sentinel(i);
                 self.set_input(i, NodePhi::create(scope.key_of(i), region, data1, data2));
             }
         }
         ((Node*)other)->kill();
-        return region;
+        node::peephole(region);
     }
 
-    void push() { scope.push(); }
-    void pop() { self.pop_inputs(scope.top_size()); scope.pop(); }
+    void push() { if(this->is_xctrl()) { return; } scope.push(); }
+    void pop() { if(this->is_xctrl()) { return; } self.pop_inputs(scope.top_size()); scope.pop(); }
 
     // If doesn't exist, return nullptr
     Node* find(Str var_name) {
+        if(this->is_xctrl()) { return VOID_NODE; }
         if(!scope.contains(var_name)) return nullptr;
         u32 index = (u32) scope[var_name];
         // if a sentinel, resolve it
@@ -360,6 +395,7 @@ struct NodeScope {
         return val;
     }
     Node* update(Str var_name, Node* new_value) {
+        if(this->is_xctrl()) { return VOID_NODE; }
         assert(var_name != CTRL_STR);
         if(!scope.contains(var_name)) { return nullptr; }
         usize var_index = scope[var_name];
@@ -369,20 +405,22 @@ struct NodeScope {
     }
     // TODO if shadowing, remove the old value I think
     Node* define(Str var_name, Node* new_value) {
+        if(this->is_xctrl()) { return VOID_NODE; }
         // no need to `resolve_sentinel` since can only define or redefine in the top scope = cannot encounter a sentinel
         // assert(var_name != CTRL_STR);
         scope.define(var_name, self.input.size);
         self.push_input(new_value);
         return new_value;
     }
-    Node* update_ctrl(Node* new_value) {
-        self.set_input(0, new_value);
-        return new_value;
+    void update_ctrl(Node* new_ctrl) {
+        if(this->is_xctrl()) { return; }
+        self.set_input(0, new_ctrl);
     }
 
     // if this->self.input[i] is a sentinel (points to a ScopeNode), insert a lazy phi in that scope and return the newly created phi
     // else return the current value
     Node* resolve_sentinel(u32 i) {
+        if(this->is_xctrl()) { return VOID_NODE; }
         Node* old = self.input[i];
         if(old->nt != NodeType::Scope) return old; // not a sentinel; do nothing
         NodeScope* sentinel = (NodeScope*)old;
@@ -406,6 +444,9 @@ struct NodeScope {
     // `back` = "continue" scope (killed after the function returns)
     // `exit` = "break" scope
     void end_loop(NodeScope* back, NodeScope* exit) {
+        // TODO problem when back or exit is xctrl
+        assert(!self.dead() && !this->is_xctrl()); // head must be alive
+        assert(back != this && back != exit && exit != this);
         NodeRegion* cur_ctrl = (NodeRegion*)this->ctrl(); // technically unsafe
         assert(cur_ctrl->self.nt == NodeType::Region && cur_ctrl->incomplete());
         cur_ctrl->complete(back->ctrl());
@@ -437,7 +478,7 @@ struct NodeScope {
     }
 };
 
-Node* START_NODE;
+// Scope nodes
 NodeScope* SCOPE_NODE;
 NodeScope* BREAK_SCOPE_NODE;
 NodeScope* CONTINUE_SCOPE_NODE;

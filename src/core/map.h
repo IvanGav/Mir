@@ -36,7 +36,7 @@ struct HMap {
 
     mem::Arena* arena;
 
-    static HMap empty(mem::Arena* arena = &default_arena) {
+    static HMap create(mem::Arena* arena = &default_arena) {
         HMap<K,V> m {};
         m.arena = arena;
         return m;

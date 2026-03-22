@@ -1,0 +1,7 @@
+let a: u64 = 1;
+let b: u64 = 2;
+while(a / 10) {
+    if (a / 2) { a = 3; }
+    else { b = 4; };
+};
+return b;

@@ -30,6 +30,9 @@ struct TypePool {
     Type* ctrl() {
         return this->request(Type { .tinfo=TypeI::Bottom, .ttype=TypeT::Ctrl });
     }
+    Type* xctrl() {
+        return this->request(Type { .tinfo=TypeI::Top, .ttype=TypeT::Ctrl });
+    }
 
     Type* bottom(TypeT tt) {
         switch(tt) {

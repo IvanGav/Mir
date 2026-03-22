@@ -21,7 +21,7 @@ enum class TypeI {
 enum class TypeT {
     // Generic
     Pure, // Type (either `let mystery;` with assignment later down the line OR meet of incompatible types)
-    Ctrl, // Type
+    Ctrl, XCtrl, // Type
 
     // Specialized
     Bool, Int, // TypeInt

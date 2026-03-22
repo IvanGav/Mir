@@ -323,17 +323,16 @@ struct Parser {
         if(t.peek_non_white() != ';') {
             // there's an else clause
             if(!this->read_token(TokenType::Else)) { error = "expected 'else' clause"_s; return nullptr; }
-            if(!this->read_token(TokenType::LeftCurly)) { error = "expected '{' after 'else'"_s; return nullptr; }
+            if(!this->read_token(TokenType::LeftCurly)) { error = "expected '{' after 'if'"_s; return nullptr; }
             Node* false_branch = this->next_block_expr();
             if(false_branch == nullptr) return nullptr;
-            // assert(false_branch->type->tinfo == TypeI::Bottom);
             scope_false = SCOPE_NODE;
         }
 
-        assert(scope_true->self.input.size == scope_false->self.input.size);
+        // assert(scope_true->self.input.size == scope_false->self.input.size); // TODO
 
         // Merge results
-        // SCOPE_NODE->update_ctrl(scope_true->merge(scope_false)); // TODO erm, it's already getting updated in `NodeScope::merge`
+        printd("IF STATEMENT MERGE");
         scope_true->merge(scope_false);
         SCOPE_NODE = scope_true;
 
@@ -368,7 +367,8 @@ struct Parser {
         SCOPE_NODE->update_ctrl(NodeRegion::create_incomplete(SCOPE_NODE->ctrl()));
         
         // Save the current scope as the loop head; will be the sentinel for the body loops
-        NodeScope* head = SCOPE_NODE; // ->keep();
+        NodeScope* head = SCOPE_NODE;
+        head->self.keep();
         // Make SCOPE_NODE the loop body scope
         SCOPE_NODE = head->duplicate_with_sentinel();
 
@@ -377,12 +377,10 @@ struct Parser {
         if(!this->read_token(TokenType::RightParenthese)) { error = "Expected ')' after 'while' condition"_s; return nullptr; }
         if(condition == nullptr) { return nullptr; }
         Node* loop_cond_node = NodeIf::create(SCOPE_NODE->ctrl(), condition, while_token);
-        // loop_cond_node->keep();
+        loop_cond_node->keep();
         Node* proj_t = NodeProj::create(0, loop_cond_node);
-        // loop_cond_node->unkeep();
+        loop_cond_node->unkeep();
         Node* proj_f = NodeProj::create(1, loop_cond_node);
-
-        assert(!loop_cond_node->dead());
 
         // Break scope has the false projection -> when while condition is false
         // By default has same variables as before entering the loop body -> just duplicate the current scope
@@ -398,9 +396,11 @@ struct Parser {
 
         // Merge the loop bottom into other continue statements
         if (CONTINUE_SCOPE_NODE != nullptr) {
+            printd("MERGE CONTINUE WITH BODY");
             SCOPE_NODE->merge(CONTINUE_SCOPE_NODE); // TODO should be sufficient, right?
             CONTINUE_SCOPE_NODE = nullptr; // no references to dead nodes
         }
+        assert(SCOPE_NODE->self.input.size != 0);
 
         // The true branch loops back, so whatever is current _scope.ctrl gets
         // added to head loop as input.  endLoop() updates the head scope, and
@@ -412,7 +412,8 @@ struct Parser {
         // connect the back edge
         assert(!head->self.dead());
         head->end_loop(SCOPE_NODE, exit_scope);
-        // head->unkeep();
+        assert(!head->self.dead());
+        head->self.unkeep();
         head->self.kill();
 
         // restore
@@ -425,47 +426,29 @@ struct Parser {
         return (Node*) SCOPE_NODE;
     }
 
-    // NodeScope* jump_to(NodeScope* to_scope) {
-    //     NodeScope* cur_scope = SCOPE_NODE->duplicate();
-    //     // ctrl(new ConstantNode(Type.XCONTROL).peephole()); // Kill current scope
-    //     SCOPE_NODE->self.kill();
-
-    //     // Prune nested lexical scopes that have depth > the loop head
-    //     // We use _breakScope as a proxy for the loop head scope to obtain the depth
-    //     while(cur_scope->scope.scopes.size > BREAK_SCOPE_NODE->scope.scopes.size )
-    //         cur_scope->pop();
-        
-    //     // If this is a continue then first time the target is null
-    //     // So we just use the pruned current scope as the base for the
-    //     // continue
-    //     if(to_scope == nullptr)
-    //         return cur_scope;
-
-    //     // toScope is either the break scope, or a scope that was created here
-    //     assert(to_scope->scope.scopes.size <= BREAK_SCOPE_NODE->scope.scopes.size);
-    //     to_scope->merge(cur_scope);
-    //     return to_scope;
-    // }
-
+    // SCOPE_NODE becomes xctrl
     void apply_break() {
+        printd("BREAK");
         if(!this->is_loop_active()) {
             error = "Cannot 'break' without an active loop"_s;
             return;
         }
         BREAK_SCOPE_NODE->merge(SCOPE_NODE);
-        SCOPE_NODE = BREAK_SCOPE_NODE;
+        SCOPE_NODE = NodeScope::create_xctrl();
     }
+    // SCOPE_NODE becomes xctrl
     void apply_continue() {
+        printd("CONTINUE");
         if(!this->is_loop_active()) {
             error = "Cannot 'continue' without an active loop"_s;
             return;
         }
         if(CONTINUE_SCOPE_NODE == nullptr) {
             CONTINUE_SCOPE_NODE = SCOPE_NODE;
-            return;
+        } else {
+            CONTINUE_SCOPE_NODE->merge(SCOPE_NODE);
+            SCOPE_NODE = NodeScope::create_xctrl();
         }
-        CONTINUE_SCOPE_NODE->merge(SCOPE_NODE);
-        SCOPE_NODE = CONTINUE_SCOPE_NODE;
     }
 
     bool is_loop_active() {

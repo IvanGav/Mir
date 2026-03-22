@@ -1,11 +1,13 @@
 let sum: u64 = 0;
 let i: u64 = 0;
 while(i / arg) {
-    i = i + 1;
-    let j: u64 = 0;
-    while(j / arg) {
-        sum = sum + j;
-        j = j + 1;
+    if(arg / 100) {
+        i = i + 1;
+        let j: u64 = 0;
+        while(j / arg) {
+            sum = sum + j;
+            j = j + 1;
+        };
     };
 };
 return sum;

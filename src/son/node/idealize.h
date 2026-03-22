@@ -51,9 +51,13 @@ namespace node {
 
             case NodeType::Phi: {
                 NodePhi* node = (NodePhi*) n;
-                // Remove a "junk" Phi: Phi(x,x) is just x
-                if(node->data(0) == node->data(1))
-                    return node->data(0);
+                // TODO make sure that's necessary
+                // if(node->incomplete() || 
+                //     (node->region()->nt == NodeType::Region && ((NodeRegion*)node->region())->incomplete())
+                // ) { return nullptr; } // self of region is incomplete; don't optimize yet
+
+                Node* maybe_single = node->single_unique_input();
+                if(maybe_single != nullptr) { return maybe_single; }
 
                 // Pull "down" a common data op. One less op in the world. One more Phi, but Phis do not make code.
                 // `Phi(op(A,B),op(Q,R),op(X,Y))` becomes `op(Phi(A,Q,X), Phi(B,R,Y))`
