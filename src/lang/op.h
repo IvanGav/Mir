@@ -165,7 +165,7 @@ namespace op {
     }
 
     Op make_binary(Op op) {
-        if(op == Op::Minus) return Op::Neg;
+        if(op == Op::Minus) return Op::Sub;
         if(op == Op::Star) return Op::Mul;
         if(op == Op::Ampersand) return Op::BitAnd;
         printe("Cannot make binary", op);

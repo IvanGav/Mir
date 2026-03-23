@@ -56,6 +56,6 @@ int main(int argc, char* argv[]) {
     Str dot = compile::dot(START_NODE);
     writeFile("./graph.gv", dot);
 
-    u64 output_value = Evaluator::create_and_run(START_NODE, -5, 1000);
+    u64 output_value = Evaluator::create_and_run(START_NODE, 10, 1000);
     std::cout << "Program output: " << output_value << std::endl;
 }
