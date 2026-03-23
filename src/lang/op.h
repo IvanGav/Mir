@@ -299,6 +299,17 @@ namespace op {
         }
         unreachable;
     }
+    i64 apply(Op op, i64 right) {
+        assert(op::unary(op));
+        switch (op) {
+            case Op::Neg:           return -right;
+            case Op::BitNot:        todo;
+            case Op::LogiNot:       todo;
+
+            default: panic;
+        }
+        unreachable;
+    }
 }
 
 /* Debug */

@@ -21,7 +21,7 @@ enum class TypeI {
 enum class TypeT {
     // Generic
     Pure, // Type (either `let mystery;` with assignment later down the line OR meet of incompatible types)
-    Ctrl, XCtrl, // Type
+    Ctrl, // Type
 
     // Specialized
     Bool, Int, // TypeInt
@@ -50,7 +50,7 @@ struct TypeInt {
     bool operator==(const TypeInt&) const = default;
     u64 hash() { return type::hash((Type*)this); }
 
-    i64 val() { assert(val_min == val_max); return val_min; }
+    i64 val() { assert(self.tinfo == TypeI::Known); assert(val_min == val_max); return val_min; }
 };
 
 struct TypeFloat {

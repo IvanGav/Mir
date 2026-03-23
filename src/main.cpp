@@ -8,6 +8,7 @@
 #include "son/parser.h"
 
 #include "compile/dot.h"
+#include "compile/graph_evaluator.h"
 
 Str readFile(const char* path, mem::Arena& arena = default_arena) {
     std::ifstream infile(path);
@@ -54,4 +55,7 @@ int main(int argc, char* argv[]) {
 
     Str dot = compile::dot(START_NODE);
     writeFile("./graph.gv", dot);
+
+    u64 output_value = Evaluator::create_and_run(START_NODE, -5, 1000);
+    std::cout << "Program output: " << output_value << std::endl;
 }

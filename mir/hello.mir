@@ -1,13 +1,18 @@
-let sum: u64 = 0;
-let i: u64 = 0;
-while(i / arg) {
-    if(arg / 100) {
-        i = i + 1;
-        let j: u64 = 0;
-        while(j / arg) {
-            sum = sum + j;
-            j = j + 1;
-        };
+let a: u64 = 1;
+let b: u64 = 2;
+
+if(arg) {
+    b = 3;
+    if(arg - 5) {
+        return 123;
+    };
+} else {
+    b = 4;
+    if(arg - 1) {
+        a = 5;
+    } else {
+        a = 6;
     };
 };
-return sum;
+
+return a + b;

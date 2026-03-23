@@ -126,7 +126,9 @@ namespace type {
             }
             
             case TypeT::Ctrl: {
-                return "Ctrl"_s; // no xctrl yet
+                if(t->tinfo == TypeI::Bottom)
+                    return "Ctrl"_s;
+                return "XCtrl"_s;
             }
 
             case TypeT::Bool: {

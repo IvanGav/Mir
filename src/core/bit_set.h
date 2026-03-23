@@ -49,8 +49,8 @@ struct BitSet {
     bool operator[](usize i) const {
         usize bits_i = i/(sizeof(bits)*8);
         usize bits_offset = i%(sizeof(bits)*8);
-        if(i >= size) { return false; }
-        return (data[i] >> bits_offset) & 1;
+        if(bits_i >= size) { return false; }
+        return (data[bits_i] >> bits_offset) & 1;
     }
 
     /* Util functions */
