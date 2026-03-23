@@ -25,24 +25,26 @@ int main(int argc, char* argv[]) {
     mem::Arena scope_arena = mem::Arena::create(10 MB);
     Node::init(node_arena);
     Type* inputs[2] = { type::pool.ctrl(), (Type*) type::pool.bottom(TypeT::Int) };
-    // Type* inputs[2] = { type::pool.ctrl(), (Type*) type::pool.int_const(5) };
     START_NODE = NodeStart::create(Slice<Type*>::from_ptr(inputs, 2));
     SCOPE_NODE = (NodeScope*) NodeScope::create(scope_arena, NodeProj::create(0, START_NODE));
     SCOPE_NODE->define("arg"_s, NodeProj::create(1, START_NODE));
     BREAK_SCOPE_NODE = CONTINUE_SCOPE_NODE = nullptr;
     
-    Str src;
+    // Str src;
+    // if(argc > 1)
+    //     src = readFile(argv[1]);
+    // else
+    //     src = readFile("mir/hello.mir");
+    Str src = readFile("mir/hello.mir");
+    u64 program_input = 0;
     if(argc > 1)
-        src = readFile(argv[1]);
-    else
-        src = readFile("mir/hello.mir");
+        program_input = atoi(argv[1]);
 
     Parser p = Parser::create(src);
 
     Node* n = nullptr;
     do {
         n = p.next_top_level_expr();
-        // if(n == nullptr) { printd("nullptr"); } else { printd(n); }
     } while(n != nullptr && n->nt != NodeType::Ret);
 
     if(n == nullptr && !p.err())
@@ -56,6 +58,6 @@ int main(int argc, char* argv[]) {
     Str dot = compile::dot(START_NODE);
     writeFile("./graph.gv", dot);
 
-    u64 output_value = Evaluator::create_and_run(START_NODE, 10, 1000);
+    u64 output_value = Evaluator::create_and_run(START_NODE, program_input, 100000);
     std::cout << "Program output: " << output_value << std::endl;
 }

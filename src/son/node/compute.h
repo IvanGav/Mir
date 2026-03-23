@@ -58,7 +58,13 @@ namespace node {
             case NodeType::Sub:
             case NodeType::Div:
             case NodeType::Mul:
-            case NodeType::Mod: {
+            case NodeType::Mod:
+            case NodeType::Eq:
+            case NodeType::Neq:
+            case NodeType::Less:
+            case NodeType::Greater:
+            case NodeType::LessEq:
+            case NodeType::GreaterEq: {
                 NodeBinOp* node = (NodeBinOp*)(n);
                 Type* lt = node->lhs()->type; Type* rt = node->rhs()->type;
                 assert(lt != nullptr); assert(rt != nullptr);

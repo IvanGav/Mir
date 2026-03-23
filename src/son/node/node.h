@@ -364,8 +364,6 @@ struct NodeScope {
             return;
         }
         if(other == this) { return; }
-        printd(self.input.size);
-        printd(other->self.input.size);
         while(self.input.size > other->self.input.size) { this->pop(); }
         this->update_ctrl(NodeRegion::create(this->ctrl(), other->ctrl()));
         Node* region = this->ctrl();

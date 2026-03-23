@@ -101,4 +101,4 @@ namespace mem {
     };
 };
 
-mem::Arena default_arena = mem::Arena::create(10 MB); // alloc 10 MB
+mem::Arena default_arena = mem::Arena::create(64 MB);

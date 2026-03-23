@@ -55,6 +55,7 @@ struct HMap {
         if(this->load_factor() > 0.75) {
             this->resize();
         }
+        size--;
         u64 hash = hash::from(key);
         usize init_index = hash%capacity;
         usize index = init_index;
@@ -62,6 +63,7 @@ struct HMap {
         for(u32 attempts = 1; map[index].exists() && !(map[index].key == key); attempts++) {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
+        if(!(map[index].exists())) { size++; }
         map[index].replace_with(key, val);
         if(init_index != index) {
             map[init_index].increment_hit_count();

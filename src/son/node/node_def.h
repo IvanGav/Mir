@@ -22,6 +22,7 @@ enum class NodeType {
     // Data
     Const,
     Add, Sub, Mul, Div, Mod, Neg,
+    Eq, Neq, Less, Greater, LessEq, GreaterEq,
     Phi,
 };
 
@@ -42,11 +43,12 @@ namespace node {
             case Op::BitOr:         todo;
             case Op::BitAnd:        todo;
             case Op::BitXor:        todo;
-            case Op::Eq:            todo;
-            case Op::Less:          todo;
-            case Op::Greater:       todo;
-            case Op::LessEq:        todo;
-            case Op::GreaterEq:     todo;
+            case Op::Eq:            return NodeType::Eq;
+            case Op::Neq:           return NodeType::Neq;
+            case Op::Less:          return NodeType::Less;
+            case Op::Greater:       return NodeType::Greater;
+            case Op::LessEq:        return NodeType::LessEq;
+            case Op::GreaterEq:     return NodeType::GreaterEq;
             case Op::Assignment:    todo;
 
             case Op::Undefined:

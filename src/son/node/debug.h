@@ -19,6 +19,12 @@ std::ostream& operator<<(std::ostream& os, NodeType nt) {
         case NodeType::Mul:         return os << "Mul";
         case NodeType::Div:         return os << "Div";
         case NodeType::Mod:         return os << "Mod";
+        case NodeType::Eq:          return os << "Eq";
+        case NodeType::Neq:         return os << "Neq";
+        case NodeType::Less:        return os << "Less";
+        case NodeType::Greater:     return os << "Greater";
+        case NodeType::LessEq:      return os << "LessEq";
+        case NodeType::GreaterEq:   return os << "GreaterEq";
         case NodeType::Neg:         return os << "Neg";
     }
     unreachable;
@@ -91,7 +97,13 @@ std::ostream& operator<<(std::ostream& os, Node* n) {
         case NodeType::Sub:
         case NodeType::Mul:
         case NodeType::Div:
-        case NodeType::Mod: {
+        case NodeType::Mod:
+        case NodeType::Eq:
+        case NodeType::Neq:
+        case NodeType::Less:
+        case NodeType::Greater:
+        case NodeType::LessEq:
+        case NodeType::GreaterEq: {
             NodeBinOp* node = (NodeBinOp*) n;
             os << "\tlhs = " << node->lhs()->uid << "\n";
             os << "\trhs = " << node->rhs()->uid << "\n";

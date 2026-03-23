@@ -54,6 +54,7 @@ struct HSet {
         if(this->load_factor() > 0.75) {
             this->resize();
         }
+        size--;
         u64 hash = hash::from(val);
         usize init_index = hash%capacity;
         usize index = init_index;
@@ -61,6 +62,7 @@ struct HSet {
         for(u32 attempts = 1; set[index].exists() && !(set[index].val == val); attempts++) {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
+        if(!(set[index].exists())) { size++; }
         set[index].replace_with(val);
         if(init_index != index) {
             set[init_index].increment_hit_count();

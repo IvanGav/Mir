@@ -16,7 +16,7 @@ enum class Op {
     Add, Sub, Mul, Div, Mod, // arithmetic
     LogiOr, LogiAnd, // logical
     BitOr, BitAnd, BitXor, // bitwise
-    Eq, Less, Greater, LessEq, GreaterEq, // comparison
+    Eq, Neq, Less, Greater, LessEq, GreaterEq, // comparison
 
     Assignment, // special; RIGHT ASSOCIATIVE
 };
@@ -47,6 +47,7 @@ namespace op {
                 return 4;
 
             case Op::Eq:
+            case Op::Neq:
             case Op::Less:
             case Op::Greater:
             case Op::LessEq:
@@ -81,6 +82,7 @@ namespace op {
             case Op::BitXor:
             case Op::BitOr:
             case Op::Eq:
+            case Op::Neq:
             case Op::Less:
             case Op::Greater:
             case Op::LessEq:
@@ -112,6 +114,7 @@ namespace op {
             case Op::BitXor:
             case Op::BitOr:
             case Op::Eq:
+            case Op::Neq:
             case Op::Less:
             case Op::Greater:
             case Op::LessEq:
@@ -146,6 +149,7 @@ namespace op {
             case Op::LogiAnd:
             case Op::LogiNot:
             case Op::Eq:
+            case Op::Neq:
             case Op::Less:
             case Op::Greater:
             case Op::LessEq:
@@ -199,6 +203,7 @@ namespace op {
             case Op::BitXor:        return "^"_s;
 
             case Op::Eq:            return "=="_s;
+            case Op::Neq:           return "!="_s;
             case Op::Less:          return "<"_s;
             case Op::Greater:       return ">"_s;
             case Op::LessEq:        return "<="_s;
@@ -246,6 +251,8 @@ namespace op {
             return Op::Assignment;
         } else if (op == "=="_s) {
             return Op::Eq;
+        } else if (op == "!="_s) {
+            return Op::Neq;
         } else if (op == "<"_s) {
             return Op::Less;
         } else if (op == ">"_s) {
@@ -287,11 +294,12 @@ namespace op {
             case Op::BitAnd:        todo;
             case Op::BitXor:        todo;
 
-            case Op::Eq:            todo;
-            case Op::Less:          todo;
-            case Op::Greater:       todo;
-            case Op::LessEq:        todo;
-            case Op::GreaterEq:     todo;
+            case Op::Eq:            return left == right;
+            case Op::Neq:           return left != right;
+            case Op::Less:          return left < right;
+            case Op::Greater:       return left > right;
+            case Op::LessEq:        return left <= right;
+            case Op::GreaterEq:     return left >= right;
 
             case Op::Assignment:    todo;
 
@@ -303,8 +311,8 @@ namespace op {
         assert(op::unary(op));
         switch (op) {
             case Op::Neg:           return -right;
-            case Op::BitNot:        todo;
-            case Op::LogiNot:       todo;
+            case Op::BitNot:        return ~right;
+            case Op::LogiNot:       return !right;
 
             default: panic;
         }

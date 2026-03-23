@@ -59,8 +59,9 @@ namespace compile {
             }
 
             case NodeType::Region: {
+                NodeRegion* node = (NodeRegion*) n;
                 Str uid = str::from_int(n->uid);
-                Vec<Str> s = Vec<Str>::with(uid, " [label=\"region\"];\n"_s);
+                Vec<Str> s = Vec<Str>::with(uid, " [label=\""_s, node->loop ? "loop"_s : "region"_s, "\"];\n"_s);
                 output.push_slice(str::from_slice_of_str(ref(s.full_slice())));
                 break;
             }
@@ -77,7 +78,13 @@ namespace compile {
             case NodeType::Sub:
             case NodeType::Mul:
             case NodeType::Div:
-            case NodeType::Mod: {
+            case NodeType::Mod:
+            case NodeType::Eq:
+            case NodeType::Neq:
+            case NodeType::Less:
+            case NodeType::Greater:
+            case NodeType::LessEq:
+            case NodeType::GreaterEq: {
                 NodeBinOp* node = (NodeBinOp*) n;
                 Str uid = str::from_int(n->uid);
                 Slice<Str> s = Vec<Str>::with(uid, " [label=\""_s, op::symbol(node->op), "\"];\n"_s).full_slice();
@@ -193,7 +200,13 @@ namespace compile {
             case NodeType::Sub:
             case NodeType::Mul:
             case NodeType::Div:
-            case NodeType::Mod: {
+            case NodeType::Mod:
+            case NodeType::Eq:
+            case NodeType::Neq:
+            case NodeType::Less:
+            case NodeType::Greater:
+            case NodeType::LessEq:
+            case NodeType::GreaterEq: {
                 NodeBinOp* node = (NodeBinOp*) n;
                 Str uid = str::from_int(n->uid);
                 Str lhs_uid = str::from_int(node->lhs()->uid);

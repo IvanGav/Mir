@@ -19,12 +19,20 @@ namespace node {
             case NodeType::Mul:
             case NodeType::Div:
             case NodeType::Mod:
+            case NodeType::Eq:
+            case NodeType::Neq:
+            case NodeType::Less:
+            case NodeType::Greater:
+            case NodeType::LessEq:
+            case NodeType::GreaterEq:
             case NodeType::Neg:
             case NodeType::Phi:
                 return false;
             
-            case NodeType::Proj:
-                return ((NodeProj*)n)->index == 0 || n->nt == NodeType::If; // TODO make sure there is no better way of doing this
+            case NodeType::Proj: {
+                NodeProj* node = (NodeProj*)n;
+                return node->index == 0 || node->ctrl()->nt == NodeType::If; // TODO make sure there is no better way of doing this
+            }
             
             case NodeType::Undefined:
                 printe("call cfg on undefined node", n);

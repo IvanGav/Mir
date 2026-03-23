@@ -54,7 +54,13 @@ struct Evaluator {
             case NodeType::Sub:
             case NodeType::Mul:
             case NodeType::Div:
-            case NodeType::Mod: {
+            case NodeType::Mod:
+            case NodeType::Eq:
+            case NodeType::Neq:
+            case NodeType::Less:
+            case NodeType::Greater:
+            case NodeType::LessEq:
+            case NodeType::GreaterEq: {
                 NodeBinOp* binop_node = (NodeBinOp*) node;
                 return op::apply(binop_node->op, Evaluator::get_value(binop_node->lhs()), Evaluator::get_value(binop_node->rhs()));
             }
@@ -63,18 +69,24 @@ struct Evaluator {
                 return op::apply(unop_node->op, Evaluator::get_value(unop_node->rhs()));
             }
 
-            default: todo;
+            default: {
+                printd(node);
+                todo;
+            }
         }
     }
 
     void latch_loop_phis(Node* region, Node* prev) {
         u32 prev_i = region->input.index_of(prev);
-        assert(prev_i > 0); // TODO why?
         u32 i = 0;
         for(Node* output : region->output) {
             if(output->nt == NodeType::Phi) {
-                u64 value = this->get_value(output->input[prev_i]);
-                loop_phi_cache.push(value); // TODO in the original, it uses lpc[i] = value; i++; why?
+                NodePhi* phi = (NodePhi*)output;
+                u64 value = this->get_value(phi->data(prev_i));
+                while(loop_phi_cache.size <= i) { loop_phi_cache.push(0); }
+                loop_phi_cache[i] = value;
+                i++;
+                // loop_phi_cache.push(value); // TODO in the original, it uses lpc[i] = value; i++; why?
             }
         }
         i = 0; // TODO why not in a single loop?
@@ -91,10 +103,10 @@ struct Evaluator {
      */
     void latch_phis(Node* region, Node* prev) {
         u32 prev_i = region->input.index_of(prev);
-        assert(prev_i > 0); // TODO why?
         for(Node* output : region->output) {
             if(output->nt == NodeType::Phi) {
-                u64 value = this->get_value(output->input[prev_i]);
+                NodePhi* phi = (NodePhi*)output;
+                u64 value = this->get_value(phi->data(prev_i));
                 cache_values.add(output, value);
             }
         }
@@ -113,7 +125,7 @@ struct Evaluator {
             switch(control->nt) {
                 case NodeType::Region: {
                     NodeRegion* region = (NodeRegion*) control;
-                    if(!region->loop && region->ctrl(1) != prev) {
+                    if(region->loop && region->ctrl(0) != prev) {
                         if(loops == 0) { timeout = true; return 0; }
                         loops--;
                         this->latch_loop_phis((Node*)region, prev);

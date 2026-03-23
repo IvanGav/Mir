@@ -332,7 +332,6 @@ struct Parser {
         // assert(scope_true->self.input.size == scope_false->self.input.size); // TODO
 
         // Merge results
-        printd("IF STATEMENT MERGE");
         scope_true->merge(scope_false);
         SCOPE_NODE = scope_true;
 
@@ -396,7 +395,6 @@ struct Parser {
 
         // Merge the loop bottom into other continue statements
         if (CONTINUE_SCOPE_NODE != nullptr) {
-            printd("MERGE CONTINUE WITH BODY");
             SCOPE_NODE->merge(CONTINUE_SCOPE_NODE); // TODO should be sufficient, right?
             CONTINUE_SCOPE_NODE = nullptr; // no references to dead nodes
         }
@@ -428,7 +426,6 @@ struct Parser {
 
     // SCOPE_NODE becomes xctrl
     void apply_break() {
-        printd("BREAK");
         if(!this->is_loop_active()) {
             error = "Cannot 'break' without an active loop"_s;
             return;
@@ -438,7 +435,6 @@ struct Parser {
     }
     // SCOPE_NODE becomes xctrl
     void apply_continue() {
-        printd("CONTINUE");
         if(!this->is_loop_active()) {
             error = "Cannot 'continue' without an active loop"_s;
             return;

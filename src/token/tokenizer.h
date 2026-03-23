@@ -180,6 +180,16 @@ struct Tokenizer {
                 }
             }
 
+            case '!': {
+                usize start = at; at++;
+                if(this->peek() == '=') {
+                    at++;
+                    return Token { .val=source.slice(start, 2), .tt=TokenType::Special };
+                } else {
+                    return Token { .val=source.slice(start, 1), .tt=TokenType::Undefined };
+                }
+            }
+
             default:
                 return Token { .val=source.slice(at++, 1), .tt=TokenType::Undefined };
         }
