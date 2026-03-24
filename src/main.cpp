@@ -36,9 +36,6 @@ int main(int argc, char* argv[]) {
     // else
     //     src = readFile("mir/hello.mir");
     Str src = readFile("mir/hello.mir");
-    u64 program_input = 0;
-    if(argc > 1)
-        program_input = atoi(argv[1]);
 
     Parser p = Parser::create(src);
 
@@ -58,6 +55,9 @@ int main(int argc, char* argv[]) {
     Str dot = compile::dot(START_NODE);
     writeFile("./graph.gv", dot);
 
-    u64 output_value = Evaluator::create_and_run(START_NODE, program_input, 100000);
-    std::cout << "Program output: " << output_value << std::endl;
+    if(argc > 1) {
+        u64 program_input = atoi(argv[1]);
+        u64 output_value = Evaluator::create_and_run(START_NODE, program_input, 100000);
+        std::cout << "Program output: " << output_value << std::endl;
+    }
 }

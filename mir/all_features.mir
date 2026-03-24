@@ -11,7 +11,7 @@ let c: i64 = 0;
     };
 };
 
-if(1+2) {
+if(arg == 10) {
     let temp: i64 = 50;
     a = temp + temp + arg;
 } else {
