@@ -213,7 +213,7 @@ struct Parser {
 
     // parse the entire primary expression with correct operator precidence
     Node* next_primary_expr() {
-        mem::Arena local = mem::Arena::create(2 KB);
+        mem::Arena local = mem::Arena::create(32 KB);
         Vec<Token> op_stack = Vec<Token>::create(local);
         Vec<Node*> val_stack = Vec<Node*>::create(local);
 

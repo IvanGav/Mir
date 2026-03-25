@@ -1,11 +1,26 @@
-# a test code that will accumulate features as I implement them
+let prime: u64 = 1;
 
-let a: i64 = 1;
+let counter: u64 = 1;
 
-if(arg == 10) {
-    a = 1 + arg;
+if (arg == 1) {
+    return 2;
 } else {
-    a = 1000 + arg;
+    while(counter != arg) {
+        prime = prime + 2;
+        let flag: u64 = 1;
+
+        let i: u64 = 3;
+        while (i < prime) {
+            if ((prime % i) == 0) {
+                flag = 0; # should break, but i don't implement break for now
+            };
+            i = i + 2;
+        };
+
+        if(flag == 1) {
+            counter = counter + 1;
+        };
+    };
 };
 
-return a + arg;
+return prime;
