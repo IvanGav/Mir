@@ -108,30 +108,6 @@ if (!(this instanceof ConstantNode) && type.isConstant()) {
 ```
 It's possible for `StartNode` to be killed, as some thing like `Start <- Const(10) <- OpNeg` will kill `OpNeg`, then `Const(10)` and then `Start`. Because it has no uses. But we're about to give it a use - `Const(-10)`. So that's strange. The problem is present in chapter 3 too, I think.
 
-## Debug jank is the only thing that keeps the _scope alive
-In chapter 8 parseWhile in Praser:
-```java
-ScopeNode head = _scope.keep();
-// Clone the head Scope to create a new Scope for the body.
-// Create phis eagerly as part of cloning
-_xScopes.push(_scope = _scope.dup(true)); // The true argument triggers creating phis
-```
-First, this is not eager, this is lazy. It was eager in chapter 7.
-Second. The clone of `_scope` in `_xScopes` is LITERALLY the only thing keeping _scope alive when in `endLoop` function:
-```java
-for( int i=1; i<nIns(); i++ ) {
-    if( back.in(i) != this ) {
-        PhiNode phi = (PhiNode)in(i);
-        assert phi.region()==ctrl && phi.in(2)==null;
-        phi.setDef(2,back.in(i));
-    }
-    if( exit.in(i) == this ) // Replace a lazy-phi on the exit path also
-        exit.setDef(i,in(i));
-}
-back.kill();
-```
-Because the only outputs of `_scope` (`this` in the current context) are to `exit` and to `back`. `back` gets killed, `exit` gets all refs to `this` replaced before `back` is killed.
-
 # Explain
 ## Lazy phi creation on variable lookup
 When parsing loops, the inner scope is created with 'sentinel' values for variables, meaning they point to the head scope.
