@@ -2,7 +2,6 @@
 
 #include "prelude.h"
 #include "mem.h"
-#include "slice.h"
 
 // any methods that accept size/capacity, will accept number of bits, not bytes or words
 struct BitSet {
@@ -18,8 +17,8 @@ struct BitSet {
         return s;
     }
 
+    // size = in sizeof(bits), not bits
     void reserve(usize new_size) {
-        new_size = ceil_div(new_size, sizeof(bits)*8);
         mem::Arena* arena = (this->arena == nullptr) ? &default_arena : this->arena;
         data = arena->realloc(data, size, new_size);
         size = new_size;
@@ -28,14 +27,14 @@ struct BitSet {
     void set(usize num) {
         usize i = num/(sizeof(bits)*8);
         usize offset = num%(sizeof(bits)*8);
-        if(i >= size) { this->reserve(next_power_of_two(i)); }
+        if(i >= size) { this->reserve(next_power_of_two(i+1)); }
         data[i] |= (1 << offset);
     }
 
     void unset(usize num) {
         usize i = num/(sizeof(bits)*8);
         usize offset = num%(sizeof(bits)*8);
-        if(i >= size) { this->reserve(next_power_of_two(i)); }
+        if(i >= size) { this->reserve(next_power_of_two(i+1)); }
         data[i] &= ~(1 << offset);
     }
 
@@ -74,10 +73,11 @@ struct BitSet {
     }
 };
 
-template <typename T>
 std::ostream& operator<<(std::ostream& os, BitSet& bitset) {
     os << '[';
-    todo;
+    for(usize i = 0; i < bitset.size * sizeof(BitSet::bits) * 8; i++) {
+        os.put(bitset[i] ? '1' : '0');
+    }
     os << ']';
     return os;
 }

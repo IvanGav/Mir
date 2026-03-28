@@ -9,9 +9,6 @@ namespace node {
     Node* peephole(Node*);
 };
 
-Node* VOID_NODE;
-Node* START_NODE;
-
 /* Specialized Nodes */
 
 // All nodes will have several static "constructors" and a `create` method that will take an object and put it into the node arena.
@@ -355,7 +352,7 @@ struct NodeScope {
     // merges `other` into `this` and kills `other`
     // note, if either scope has more layers, bring it down to the smallest of the two
     void merge(NodeScope* other) {
-        assert(!self.dead()); assert(!other->self.dead());
+        assert(!self.is_dead()); assert(!other->self.is_dead());
         if(other->is_xctrl()) { return; }
         if(this->is_xctrl()) {
             self.kill();
@@ -443,7 +440,7 @@ struct NodeScope {
     // `exit` = "break" scope
     void end_loop(NodeScope* back, NodeScope* exit) {
         // TODO problem when back or exit is xctrl
-        assert(!self.dead() && !this->is_xctrl()); // head must be alive
+        assert(!self.is_dead() && !this->is_xctrl()); // head must be alive
         assert(back != this && back != exit && exit != this);
         NodeRegion* cur_ctrl = (NodeRegion*)this->ctrl(); // technically unsafe
         assert(cur_ctrl->self.nt == NodeType::Region && cur_ctrl->incomplete());
@@ -475,8 +472,3 @@ struct NodeScope {
         }
     }
 };
-
-// Scope nodes
-NodeScope* SCOPE_NODE;
-NodeScope* BREAK_SCOPE_NODE;
-NodeScope* CONTINUE_SCOPE_NODE;

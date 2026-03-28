@@ -43,7 +43,7 @@ struct Type {
 /* Specific types */
 
 struct TypeInt {
-    // TODO look at "known bits"
+    // maybe look at "known bits" in the future
     Type self;
     i64 val_min;
     i64 val_max;

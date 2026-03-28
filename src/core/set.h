@@ -14,14 +14,12 @@
 template <typename T>
 struct HSet {
     struct Entry {
-        u8 flags; // 0bccccccce where e=exists flag, c=hit count bits (7 total)
         // u64 key_hash; // calculating the hash is expensive
         T val;
+        u8 flags; // 0bte where e=exists flag, c=hit count bits (32-1 total)
 
         bool exists() const { return flags & 1; }
-        u8 hit_count() const { return flags >> 1; }
-        void increment_hit_count() { assert(this->hit_count() < (MAX_HIT_COUNT)); flags += 2; }
-        void decrement_hit_count() { assert(this->hit_count() > 0); flags -= 2; }
+        bool tombstone() const { return flags & 2; }
         void replace_with(T val) { this->flags |= 1; this->val = val; }
         void destroy() { this->flags &= ~(1); }
     };
@@ -35,7 +33,7 @@ struct HSet {
 
     mem::Arena* arena;
 
-    static HSet empty(mem::Arena& arena = default_arena) {
+    static HSet create(mem::Arena& arena = default_arena) {
         HSet<T> m {};
         m.arena = &arena;
         return m;
@@ -67,6 +65,28 @@ struct HSet {
         if(init_index != index) {
             set[init_index].increment_hit_count();
         }
+    }
+
+    void remove(T& val) {
+        u64 hash = hash::from(val);
+        usize init_index = hash%capacity;
+        usize index = init_index;
+        u32 attempts = 1;
+        // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
+        for(; set[index].exists() && !(set[index].val == val); attempts++) {
+            index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
+        }
+        if(!(set[index].exists())) { std::cout << "Element does not exist in the set" << std::endl; panic; } // cannot remove an element that doesn't exist
+        u8 hit_count = set[init_index].hit_count();
+        set[index].destroy(); // actually remove
+        if(index == init_index && hit_count == 0) {
+            // there were no collisions
+            return;
+        }
+        // there was a collision for `hash`; replace `set[index]` with last collided element
+        set[init_index].decrement_hit_count();
+        u8 hit_count = set[init_index].hit_count();
+        todo;
     }
 
     void resize() {
@@ -125,7 +145,7 @@ struct HSet {
         return &set[index].val;
     }
 
-    bool exists(T val) const {
+    bool has(T val) const {
         if(capacity == 0) return false;
         u64 hash = hash::from(val);
         usize init_index = hash%capacity;

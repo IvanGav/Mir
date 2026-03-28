@@ -3,7 +3,6 @@
 // 1-1 translated from Simple ch8. I just need it for testing.
 
 #include "../son/node.h"
-#include "../core/bit_set.h"
 
 #define LOOP_CACHE_SIZE 16
 

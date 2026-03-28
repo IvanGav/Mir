@@ -10,6 +10,8 @@
 
 #include "../../token/tokenizer.h"
 
+#include "static.h"
+
 enum class NodeType {
     Undefined,
     Scope,
@@ -67,22 +69,27 @@ struct Node {
     Maybe<Token> token;
     Vec<Node*> input; // use-def references; nullable, fixed length, ordered
     Vec<Node*> output; // def-use references; can have null values only from calling `keep` and `unkeep` 
-    Type* type; // best known type of this node; if null, this node is dead (for nonull for alive nodes)
+    Type* type; // best known type of this node; if null, this node is dead (nonull for alive nodes)
+    u64 hash; // cached hash; for general speedup on gvn lookup
+    bool locked; // cannot modify inputs or type because of GVN
 
     inline static u32 uid_counter = 0;
     inline static mem::Arena* node_arena = nullptr;
+    inline static HSet<Node*> GVN = {}; // global value numbering
 
     // CALL AT THE BEGINNING OF MAIN
     static void init(mem::Arena& arena) {
         Node::uid_counter = 0;
         Node::node_arena = &arena;
+        Node::GVN = HSet<Node*>::create(arena);
     }
 
     // No token
     static Node empty(NodeType type) {
         Node::uid_counter++;
         return Node { .uid=Node::uid_counter, .nt=type, .token=Maybe<Token>::none(),
-            .input=Vec<Node*>::create(*Node::node_arena), .output=Vec<Node*>::create(*Node::node_arena), .type=type::pool.top()
+            .input=Vec<Node*>::create(*Node::node_arena), .output=Vec<Node*>::create(*Node::node_arena),
+            .type=type::pool.top(), .hash=0, .locked=false
         };
     }
     // Yes token
@@ -112,9 +119,7 @@ struct Node {
         if(last_input != nullptr) {
             last_input->output.remove_first_of(this); // remove this from popped node's output
             // If we removed the last use, the old input is now dead
-            if(last_input->unused()) {
-                // TODO what the heck is going on here
-                // assert(last_input->nt != NodeType::Scope); // shouldn't remove scopes as part of DCE
+            if(last_input->is_unused()) {
                 last_input->kill();
             }
         }
@@ -128,7 +133,7 @@ struct Node {
         if(value != nullptr) {
             value->output.remove_first_of(this); // remove this from popped node's output
             // If we removed the last use, the old input is now dead
-            if(value->unused())
+            if(value->is_unused())
                 value->kill();
         }
     }
@@ -143,7 +148,7 @@ struct Node {
         if(old_input != nullptr) {
             old_input->output.remove_first_of(this); // remove this from last node's output
             // If we removed the last use, the old input is now dead
-            if(old_input->unused())
+            if(old_input->is_unused())
                 old_input->kill();
         }
         // Set the new_def over the old (killed) edge
@@ -151,18 +156,18 @@ struct Node {
         // Return self for easy flow-coding
         return new_input;
     }
-    bool unused() {
+    bool is_unused() {
         return output.empty();
     }
-    bool dead() {
-        return this->unused() && input.empty() && type == nullptr;
+    bool is_dead() {
+        return this->is_unused() && input.empty() && type == nullptr;
     }
     void kill() {
-        assert(this->unused()); // Has no uses, so it is dead
+        assert(this->is_unused()); // Has no uses, so it is dead
         this->pop_inputs(input.size); // Set all inputs to null, recursively killing unused Nodes
         // for(usize i = 0; i < input.size; i++) { this->set_input(i, nullptr); } input.clear();
         type = nullptr; // Flag as dead
-        assert(this->dead());
+        assert(this->is_dead());
     }
 
     // Replace self with `other` in the graph, making `this` go dead
@@ -174,14 +179,22 @@ struct Node {
             n->input[i] = other;
             other->output.push(n);
         }
-        kill();
+        this->kill();
     }
     
     // helpters to stop DCE mid-parse
     // Add bogus null use to keep node alive
-    void keep() { this->output.push(nullptr); }
+    void keep() { output.push(nullptr); }
     // Remove bogus null.
-    void unkeep() { this->output.remove_first_of(nullptr); }
+    void unkeep() { output.remove_first_of(nullptr); }
+
+    void unlock() {
+        if(!locked) return;
+        Node* old = nullptr; todo;
+        Node::GVN.remove(ref(this));
+        assert(old == this);
+        locked = false;
+    }
 
     // helpers
 

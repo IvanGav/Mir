@@ -12,6 +12,7 @@
 #include <stdalign.h>
 #include <bit>
 #include <type_traits>
+#include <concepts>
 
 typedef int8_t i8;
 typedef uint8_t u8;

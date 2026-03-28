@@ -5,7 +5,7 @@
 namespace compile {
 
     void dot_declare_node(Node* n, HSet<Node*>& visited, Vec<u8>& output) {
-        if(visited.exists(n)) return;
+        if(visited.has(n)) return;
         visited.add(n);
         for(u32 i = 0; i < n->output.size; i++) {
             compile::dot_declare_node(n->output[i], visited, output);
@@ -108,7 +108,7 @@ namespace compile {
     }
 
     void dot_add_edges(Node* n, HSet<Node*>& visited, Vec<u8>& output) {
-        if(visited.exists(n)) return;
+        if(visited.has(n)) return;
         visited.add(n);
         for(u32 i = 0; i < n->output.size; i++) {
             compile::dot_add_edges(n->output[i], visited, output);
@@ -241,11 +241,11 @@ namespace compile {
         Vec<u8> output = Vec<u8>::create();
         output.push_slice("digraph son_graph {\n"_s);
         {
-            HSet<Node*> visited = HSet<Node*>::empty(default_arena);
+            HSet<Node*> visited = HSet<Node*>::create(default_arena);
             compile::dot_declare_node(start, visited, output);
         }
         {
-            HSet<Node*> visited = HSet<Node*>::empty(default_arena);
+            HSet<Node*> visited = HSet<Node*>::create(default_arena);
             compile::dot_add_edges(start, visited, output);
         }
         output.push_slice("}\n"_s);

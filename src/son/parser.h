@@ -408,9 +408,9 @@ struct Parser {
         NodeScope* exit_scope = BREAK_SCOPE_NODE;
 
         // connect the back edge
-        assert(!head->self.dead());
+        assert(!head->self.is_dead());
         head->end_loop(SCOPE_NODE, exit_scope);
-        assert(!head->self.dead());
+        assert(!head->self.is_dead());
         head->self.unkeep();
         head->self.kill();
 

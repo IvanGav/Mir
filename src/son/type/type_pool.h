@@ -97,7 +97,7 @@ struct TypePool {
         // TypeTuple contains a slice, which may not be valid forever
         // if doesn't exist, deep clone; retrieve otherwise
         // hash and operator== on slices are deep, so no need to worry there
-        if(!s_type_tuple.exists(t)) {
+        if(!s_type_tuple.has(t)) {
             Slice<Type*> slice_deep_clone = Vec<Type*>::clone_slice(t.val, *type_arena).full_slice();
             TypeTuple deep_clone = TypeTuple { .self = t.self, .val = slice_deep_clone};
             s_type_tuple.add(deep_clone);

@@ -19,7 +19,7 @@ namespace node {
 
         // better representation found
         // Note that some peepholes modify inputs of a node, but leave the input node `n` valid and return it
-        if(n != idealized && n->unused()) {
+        if(n != idealized && n->is_unused()) {
             // TODO do I need idealized.keep() and idealized.unkeep()??
             n->kill();
         }
