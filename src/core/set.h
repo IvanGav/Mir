@@ -6,6 +6,7 @@
 #include "pair.h"
 #include "vec.h"
 #include "hash.h"
+#include "bitset.h"
 
 #define MAX_HIT_COUNT 0b01111111
 
@@ -13,18 +14,9 @@
 // values must have == operator defined
 template <typename T>
 struct HSet {
-    struct Entry {
-        // u64 key_hash; // calculating the hash is expensive
-        T val;
-        u8 flags; // 0bte where e=exists flag, c=hit count bits (32-1 total)
-
-        bool exists() const { return flags & 1; }
-        bool tombstone() const { return flags & 2; }
-        void replace_with(T val) { this->flags |= 1; this->val = val; }
-        void destroy() { this->flags &= ~(1); }
-    };
-
-    Vec<Entry> set;
+    T* set;
+    BitSet exists;
+    BitSet tombstone;
     u32 size;
     u32 capacity;
 
@@ -44,27 +36,26 @@ struct HSet {
     }
 
     f32 load_factor() {
-        return (f32) size / (f32) capacity;
+        return (f32) (size+1) / (f32) capacity;
     }
 
     void add(T val) {
-        size++;
         if(this->load_factor() > 0.75) {
             this->resize();
         }
-        size--;
         u64 hash = hash::from(val);
         usize init_index = hash%capacity;
         usize index = init_index;
         // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
-        for(u32 attempts = 1; set[index].exists() && !(set[index].val == val); attempts++) {
+        for(u32 attempts = 1; tombstone[index] && !(exists[index] && set[index] == val); attempts++) {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
-        if(!(set[index].exists())) { size++; }
-        set[index].replace_with(val);
-        if(init_index != index) {
-            set[init_index].increment_hit_count();
+        if(!(exists[index])) {
+            size++;
+            tombstone.set(index);
+            exists.set(index);
         }
+        set[index] = val;
     }
 
     void remove(T& val) {
@@ -73,33 +64,29 @@ struct HSet {
         usize index = init_index;
         u32 attempts = 1;
         // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
-        for(; set[index].exists() && !(set[index].val == val); attempts++) {
+        for(; tombstone[index] && !(exists[index] && set[index] == val); attempts++) {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
-        if(!(set[index].exists())) { std::cout << "Element does not exist in the set" << std::endl; panic; } // cannot remove an element that doesn't exist
-        u8 hit_count = set[init_index].hit_count();
-        set[index].destroy(); // actually remove
-        if(index == init_index && hit_count == 0) {
-            // there were no collisions
-            return;
-        }
-        // there was a collision for `hash`; replace `set[index]` with last collided element
-        set[init_index].decrement_hit_count();
-        u8 hit_count = set[init_index].hit_count();
-        todo;
+        if(!(exists[index])) { std::cout << "Element does not exist in the set" << std::endl; panic; } // cannot remove an element that doesn't exist
+        exists.unset(index);
     }
 
     void resize() {
-        Vec<Entry> old_set = set;
-        this->set = Vec<Entry>::create(*arena); // create a new vec; it'd be difficult to rehash in-place
-        this->capacity = next_prime_size(capacity);
-        this->set.reserve(capacity);
-        this->set.size = set.capacity;
+        if(arena == nullptr) { arena = &default_arena; }
+        mem::Arena scratch = mem::Arena::create(10 MB);
+        u32 old_capacity = capacity;
+        T* old_set = set;
+        BitSet old_exists = exists.clone(&scratch);
+
+        capacity = next_prime_size(capacity);
+        set = arena->alloc<T>(capacity);
+        tombstone.clear();
+        exists.clear();
+
         // copy all elements from the old set
-        for(Entry& e : old_set) {
-            // theoretically preserving element order may be beneficial? buuut
-            if(e.exists())
-                this->add(e.val);
+        for(u32 i = 0; i < old_capacity; i++) {
+            if(old_exists[i])
+                this->add(old_set[i]);
         }
     }
 
@@ -111,24 +98,25 @@ struct HSet {
         usize init_index = hash%capacity;
         usize index = init_index;
         // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
-        for(u32 attempts = 1; set[index].exists() && !(set[index].val == val); attempts++) {
+        for(u32 attempts = 1; tombstone[index] && !(exists[index] && set[index] == val); attempts++) {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
-        assert(set[index].exists());
-        return set[index].val;
+        assert(exists[index]);
+        return set[index];
     }
 
     T const* get(T val) const {
+        todo;
         assert(capacity > 0);
         u64 hash = hash::from(val);
         usize init_index = hash%capacity;
         usize index = init_index;
         // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
-        for(u32 attempts = 1; set[index].exists() && !(set[index].val == val); attempts++) {
+        for(u32 attempts = 1; tombstone[index] && !(exists[index] && set[index] == val); attempts++) {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
-        assert(set[index].exists());
-        return &set[index].val;
+        assert(exists[index]);
+        return &set[index];
     }
     
     T* get(T val) {
@@ -137,12 +125,11 @@ struct HSet {
         usize init_index = hash%capacity;
         usize index = init_index;
         // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
-        for(u32 attempts = 1; set[index].exists() && !(set[index].val == val); attempts++) {
+        for(u32 attempts = 1; tombstone[index] && !(exists[index] && set[index] == val); attempts++) {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
-        assert(set[index].exists());
-        // std::cout << (void*)(&(set[index].val)) << std::endl;
-        return &set[index].val;
+        assert(exists[index]);
+        return &set[index];
     }
 
     bool has(T val) const {
@@ -151,10 +138,10 @@ struct HSet {
         usize init_index = hash%capacity;
         usize index = init_index;
         // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
-        for(u32 attempts = 1; set[index].exists() && !(set[index].val == val); attempts++) {
+        for(u32 attempts = 1; tombstone[index] && !(exists[index] && set[index] == val); attempts++) {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
-        return set[index].exists();
+        return exists[index];
     }
 
     /* Cloning */
@@ -162,10 +149,16 @@ struct HSet {
     // if `new_arena` is `nullptr`, use the same arena as `this`
     HSet<T> clone(mem::Arena* new_arena = nullptr) {
         if(new_arena == nullptr) new_arena = arena;
-        HSet<T> cloned {};
-        cloned.size = size;
-        cloned.capacity = capacity;
-        cloned.set = set.clone(new_arena);
+        HSet<T> cloned = HSet<T> {
+            .set = new_arena->alloc<T>(capacity),
+            .exists = exists.clone(new_arena),
+            .tombstone = tombstone.clone(new_arena),
+            .size = size,
+            .capacity = capacity,
+            .arena = new_arena
+        };
+        mem::copy(cloned.set, set, capacity);
+        assert(cloned.arena != nullptr);
         return cloned;
     }
 };

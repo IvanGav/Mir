@@ -230,6 +230,14 @@ struct Vec {
     T* end() {
         return data + size;
     }
+
+    bool operator==(const Vec<T>& other) const {
+        if(size != other.size) return false;
+        for(u32 i = 0; i < size; i++) {
+            if(data[i] != other.data[i]) return false;
+        }
+        return true;
+    }
 };
 
 template <typename T>

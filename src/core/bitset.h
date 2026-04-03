@@ -21,7 +21,14 @@ struct BitSet {
     void reserve(usize new_size) {
         mem::Arena* arena = (this->arena == nullptr) ? &default_arena : this->arena;
         data = arena->realloc(data, size, new_size);
+        mem::zero(data+size, new_size-size); // zero out the new bytes
         size = new_size;
+    }
+
+    // num = number of bits to reserve for
+    void reserve_bits(usize num) {
+        usize i = ceil_div(num,(sizeof(bits)*8));
+        if(i >= size) { this->reserve(i); }
     }
 
     void set(usize num) {
@@ -55,21 +62,22 @@ struct BitSet {
     /* Util functions */
 
     void clear() {
-        size = 0;
+        // size = 0;
+        mem::zero(data, size);
     }
 
     /* Cloning */
 
     // if `new_arena` is `nullptr`, use the same arena as `this`
-    // shallow clone **NOT DEEP CLONE**
     BitSet clone(mem::Arena* new_arena = nullptr) {
-        if(new_arena == nullptr) new_arena = arena;
-        BitSet cloned {};
-        cloned.arena = new_arena;
-        cloned.size = size;
-        cloned.data = new_arena->alloc<bits>(size);
-        mem::copy<bits>(cloned.data, data, size);
-        return cloned;
+        new_arena = (new_arena == nullptr ? this->arena : new_arena);
+        BitSet newbs {
+            .data = new_arena->alloc<bits>(size),
+            .size = size,
+            .arena = new_arena,
+        };
+        mem::copy<bits>(newbs.data, data, size);
+        return newbs;
     }
 };
 

@@ -12,6 +12,7 @@ struct TypePool {
     mem::Arena* type_arena;
 
     HSet<Type> s_type;
+    // Type bottom; Type top; Type ctrl; Type xctlr;
     HSet<TypeInt> s_type_int;
     HSet<TypeFloat> s_type_float;
     HSet<TypeTuple> s_type_tuple;

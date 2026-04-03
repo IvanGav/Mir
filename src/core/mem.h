@@ -31,6 +31,16 @@ namespace mem {
         mem::copy(l2, &temp, 1);
     }
 
+    template <typename T>
+    void zero(T* ptr, usize size) {
+        ::memset((void*) ptr, 0, sizeof(T) * size);
+    }
+
+    template <typename T>
+    void set(T* ptr, usize size, T val) {
+        ::memset((void*) ptr, val, sizeof(T) * size);
+    }
+
     // Arena handles must be stored on a stack OR freed manually
     struct Arena {
         u8* data;
@@ -50,6 +60,7 @@ namespace mem {
             return Arena { .data = ptr, .cur = ptr, .end_ptr = ptr+size };
         }
 
+        // does **not** zero initialize
         template <typename T>
         T* alloc(usize size) {
             void* ptr = cur;
@@ -62,14 +73,18 @@ namespace mem {
             return (T*) ptr;
         };
 
+        // does **not** zero initialize
         template <typename T>
         T* push(T item) {
-            void* ptr = this->alloc<T>(1);
-            T* tptr = (T*) ptr;
-            *tptr = item;
-            return tptr;
+            T* ptr = this->alloc<T>(1);
+            // T* tptr = (T*) ptr;
+            // *tptr = item;
+            *ptr = item;
+            // return tptr;
+            return ptr;
         };
         
+        // does **not** zero initialize
         template <typename T>
         T* realloc(T* ptr, usize last_size, usize new_size) {
             if(last_size >= new_size) {

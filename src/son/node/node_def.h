@@ -11,6 +11,12 @@
 #include "../../token/tokenizer.h"
 
 #include "static.h"
+#include "gvn.h"
+
+struct Node;
+namespace node {
+    u64 hash(Node*);
+};
 
 enum class NodeType {
     Undefined,
@@ -75,13 +81,13 @@ struct Node {
 
     inline static u32 uid_counter = 0;
     inline static mem::Arena* node_arena = nullptr;
-    inline static HSet<Node*> GVN = {}; // global value numbering
+    inline static GVN gvn = {}; // global value numbering
 
     // CALL AT THE BEGINNING OF MAIN
     static void init(mem::Arena& arena) {
         Node::uid_counter = 0;
         Node::node_arena = &arena;
-        Node::GVN = HSet<Node*>::create(arena);
+        Node::gvn = GVN::create(arena);
     }
 
     // No token
@@ -188,13 +194,18 @@ struct Node {
     // Remove bogus null.
     void unkeep() { output.remove_first_of(nullptr); }
 
-    void unlock() {
-        if(!locked) return;
-        Node* old = nullptr; todo;
-        Node::GVN.remove(ref(this));
-        assert(old == this);
-        locked = false;
-    }
+    // void unlock() {
+    //     if(!locked) return;
+    //     Node* old = Node::gvn.remove(ref(this));
+    //     assert(old == this);
+    //     locked = false;
+    // }
+    // void lock() {
+    //     todo;
+    //     if(locked) return;
+    //     Node::gvn.insert(this);
+    //     locked = true;
+    // }
 
     // helpers
 

@@ -27,6 +27,7 @@ enum class TypeT {
     Bool, Int, // TypeInt
     Float, // TypeFloat
     Tuple, // TypeTuple
+    Ptr, // TypePtr
 };
 
 struct Type {
@@ -67,5 +68,12 @@ struct TypeTuple {
     Type self;
     Slice<Type*> val;
     bool operator==(const TypeTuple&) const = default;
+    u64 hash() { return type::hash((Type*)this); }
+};
+
+struct TypePtr {
+    Type self;
+    Type* ptr;
+    bool operator==(const TypePtr&) const = default;
     u64 hash() { return type::hash((Type*)this); }
 };
