@@ -67,6 +67,9 @@ struct NodeConst {
         ptr->push_inputs(ctrl);
         return node::peephole(ptr);
     }
+    static Node* create(i64 value, Node* ctrl, Token t = Token::empty) {
+        return NodeConst::create(type::pool.int_const(value), ctrl, t);
+    }
 
     // Getters
     Node* ctrl() { return self.input[0]; }
@@ -128,18 +131,19 @@ struct NodeUnOp {
     Node* rhs() { return self.input[0]; }
 };
 
+// self.nt == Proj OR CtrlProj
 struct NodeProj {
     // self.input = [ctrl]
     Node self;
     u32 index;
 
     // Constructors
-    static Node* create(u32 tuple_index, Node* ctrl) {
+    static Node* create(u32 tuple_index, Node* ctrl, bool is_cfg) {
         assert(ctrl != nullptr);
         assert(ctrl->type != nullptr);
         assert(ctrl->type->ttype == TypeT::Tuple);
         NodeProj node = { 
-            .self = Node::create(NodeType::Proj),
+            .self = Node::create(is_cfg ? NodeType::CtrlProj : NodeType::Proj),
             .index = tuple_index
         };
         Node* ptr = (Node*) Node::node_arena->push(node);
@@ -300,6 +304,77 @@ struct NodePhi {
     }
 };
 
+struct NodeLoad {
+    // self.input = [mem (mem), base (ptr), offset (i64)]
+    Node self;
+    u32 mem_alias;
+    Type* decl_type;
+
+    static Node* create(u32 alias, Node* mem, Node* ptr, Node* offset) {
+        // assert(mem->type->ttype == TypeT::Mem);
+        // assert(ptr->type->ttype == TypeT::Ptr);
+        NodeLoad node = {
+            .self = Node::create(NodeType::Load),
+            .mem_alias = alias,
+            .decl_type = type::pool.int_sized(4) // TODO hardcoded
+        };
+        Node* nptr = (Node*) Node::node_arena->push(node);
+        nptr->push_inputs(mem, ptr, offset);
+        return node::peephole(nptr);
+    }
+
+    Node* mem() { return self.input[0]; }
+    Node* ptr() { return self.input[1]; }
+    Node* off() { return self.input[2]; }
+};
+
+struct NodeStore {
+    // self.input = [mem (mem), base (ptr), offset (i64), val]
+    Node self;
+    u32 mem_alias;
+    Type* decl_type;
+
+    static Node* create(u32 alias, Node* mem, Node* ptr, Node* offset, Node* val) {
+        // assert(mem->type->ttype == TypeT::Mem);
+        // assert(ptr->type->ttype == TypeT::Ptr);
+        NodeStore node = {
+            .self = Node::create(NodeType::Store),
+            .mem_alias = alias,
+            .decl_type = type::pool.int_sized(4) // TODO hardcoded
+        };
+        Node* nptr = (Node*) Node::node_arena->push(node);
+        nptr->push_inputs(mem, ptr, offset, val);
+        return node::peephole(nptr);
+    }
+
+    Node* mem() { return self.input[0]; }
+    Node* ptr() { return self.input[1]; }
+    Node* off() { return self.input[2]; }
+    Node* val() { return self.input[3]; }
+};
+
+struct NodeAllocA {
+    // self.input = [ctrl, alloc_size, init_mem]
+    Node self;
+    // ptr->ttype == TypeT::Ptr
+    Type* ptr;
+
+    static Node* create(Type* decl_type, Node* ctrl, Node* alloc_size, Node* init_mem) {
+        assert(decl_type->ttype == TypeT::Ptr);
+        NodeAllocA node = {
+            .self = Node::create(NodeType::AllocA),
+            .ptr = decl_type
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl, alloc_size, init_mem);
+        return node::peephole(ptr);
+    }
+
+    Node* ctrl() { return self.input[0]; }
+    Node* size() { return self.input[1]; }
+    Node* mem() { return self.input[2]; }
+};
+
 struct NodeScope {
     // self.input = [ctrl, ...]
     // note, self.input[i>0] can be NodeScope*; in that case it's a "sentinel"; read `# Explain` in README.md
@@ -310,7 +385,7 @@ struct NodeScope {
     static NodeScope* create(mem::Arena& arena, Node* ctrl) {
         NodeScope node = NodeScope { .self = Node::create(NodeType::Scope), .scope = VariableScope<usize>::create(arena) };
         NodeScope* ptr = Node::node_arena->push(node);
-        ptr->self.type = type::pool.ctrl(); // maybe has to be Pure:Bottom?
+        ptr->self.type = type::pool.ctrl; // maybe has to be Pure:Bottom?
         ptr->define(CTRL_STR, ctrl);
         return ptr;
     }
@@ -319,13 +394,13 @@ struct NodeScope {
     static NodeScope* create_xctrl() {
         NodeScope node = NodeScope { .self = Node::create(NodeType::Scope) };
         NodeScope* ptr = Node::node_arena->push(node);
-        ptr->self.type = type::pool.xctrl();
+        ptr->self.type = type::pool.xctrl;
         return ptr;
     }
 
     // Getters
     Node* ctrl() { assert(self.input.size > 0); return self.input[0]; }
-    bool is_xctrl() { return self.type == type::pool.xctrl(); }
+    bool is_xctrl() { return self.type == type::pool.xctrl; }
 
     // Methods
     NodeScope* duplicate() {

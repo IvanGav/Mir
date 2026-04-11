@@ -1,15 +1,15 @@
-let prime: u64 = 1;
+let prime: i64 = 1;
 
-let counter: u64 = 1;
+let counter: i64 = 1;
 
 if (arg == 1) {
     return 2;
 } else {
     while(counter != arg) {
         prime = prime + 2;
-        let flag: u64 = 1;
+        let flag: i64 = 1;
 
-        let i: u64 = 3;
+        let i: i64 = 3;
         while (i < prime) {
             if ((prime % i) == 0) {
                 flag = 0; # should break, but i don't implement break for now

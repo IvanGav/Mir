@@ -15,7 +15,7 @@ namespace type {
         assert(t1 != nullptr);
         assert(t2 != nullptr);
         // meet of two unrelated types is always Pure:Bottom
-        if(t1->ttype != t2->ttype) return pool.request(Type { .tinfo = TypeI::Bottom, .ttype = TypeT::Pure });
+        if(t1->ttype != t2->ttype) return pool.bottom;
 
         // for all types, Top meet Something = Something
         if(t1->tinfo == TypeI::Top) return t2;
@@ -25,7 +25,7 @@ namespace type {
         if(t2->tinfo == TypeI::Bottom) return t2;
         
         switch (t1->ttype) {
-            case TypeT::Pure: return t1;
+            case TypeT::Pure:
             case TypeT::Ctrl: return t1;
 
             case TypeT::Bool:
@@ -35,8 +35,8 @@ namespace type {
                 i64 min = max(ti1->val_min, ti2->val_min);
                 i64 max = min(ti1->val_max, ti2->val_max);
                 if(min > max)
-                    return reinterpret_cast<Type*>(pool.get_int( TypeInt { .self = Type { .tinfo = TypeI::Bottom, .ttype = ti1->self.ttype } } ));
-                return reinterpret_cast<Type*>(pool.get_int( TypeInt { .self = Type { .tinfo = TypeI::Known, .ttype = ti1->self.ttype }, .val_min = min, .val_max = max } ));
+                    return pool.get_int( TypeInt { .self = Type { .tinfo = TypeI::Bottom, .ttype = ti1->self.ttype } } );
+                return pool.get_int( TypeInt { .self = Type { .tinfo = TypeI::Known, .ttype = ti1->self.ttype }, .val_min = min, .val_max = max } );
             }
 
             case TypeT::Float: {
@@ -45,12 +45,20 @@ namespace type {
                 f64 min = max(tf1->val_min, tf2->val_min);
                 f64 max = min(tf1->val_max, tf2->val_max);
                 if(min > max)
-                    return reinterpret_cast<Type*>(pool.get_float( TypeFloat { .self = Type { .tinfo = TypeI::Bottom, .ttype = tf1->self.ttype } } ));
-                return reinterpret_cast<Type*>(pool.get_float( TypeFloat { .self = Type { .tinfo = TypeI::Known, .ttype = tf1->self.ttype }, .val_min = min, .val_max = max } ));
+                    return pool.get_float( TypeFloat { .self = Type { .tinfo = TypeI::Bottom, .ttype = tf1->self.ttype } } );
+                return pool.get_float( TypeFloat { .self = Type { .tinfo = TypeI::Known, .ttype = tf1->self.ttype }, .val_min = min, .val_max = max } );
             }
 
             case TypeT::Tuple: {
                 todo; // TODO literally *this* in chapter 4
+            }
+
+            case TypeT::Mem:
+            case TypeT::Ptr: {
+                TypePtr* tp1 = reinterpret_cast<TypePtr*>(t1);
+                TypePtr* tp2 = reinterpret_cast<TypePtr*>(t2);
+                if(tp1->ptr == tp2->ptr && tp1->size == tp2->size) { return t1; }
+                return type::pool.get_bottom(t1->ttype);
             }
         }
         unreachable;

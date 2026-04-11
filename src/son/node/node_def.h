@@ -11,7 +11,7 @@
 #include "../../token/tokenizer.h"
 
 #include "static.h"
-#include "gvn.h"
+// #include "gvn.h"
 
 struct Node;
 namespace node {
@@ -26,12 +26,14 @@ enum class NodeType {
     // Control
     Start, Ret,
     If, Region,
+    CtrlProj,
 
     // Data
     Const,
     Add, Sub, Mul, Div, Mod, Neg,
     Eq, Neq, Less, Greater, LessEq, GreaterEq,
     Phi,
+    Load, Store, AllocA
 };
 
 namespace node {
@@ -81,13 +83,13 @@ struct Node {
 
     inline static u32 uid_counter = 0;
     inline static mem::Arena* node_arena = nullptr;
-    inline static GVN gvn = {}; // global value numbering
+    // inline static GVN gvn = {}; // global value numbering
 
     // CALL AT THE BEGINNING OF MAIN
     static void init(mem::Arena& arena) {
         Node::uid_counter = 0;
         Node::node_arena = &arena;
-        Node::gvn = GVN::create(arena);
+        // Node::gvn = GVN::create(arena);
     }
 
     // No token
@@ -95,7 +97,7 @@ struct Node {
         Node::uid_counter++;
         return Node { .uid=Node::uid_counter, .nt=type, .token=Maybe<Token>::none(),
             .input=Vec<Node*>::create(*Node::node_arena), .output=Vec<Node*>::create(*Node::node_arena),
-            .type=type::pool.top(), .hash=0, .locked=false
+            .type=type::pool.top, .hash=0, .locked=false
         };
     }
     // Yes token

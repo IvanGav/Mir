@@ -1,3 +1,6 @@
+// no optimizations please
+// #define NOOPTS
+
 #include "core/prelude.h"
 #include "core/str.h"
 #include "core/vec.h"
@@ -23,11 +26,14 @@ void writeFile(const char* path, Str content) {
 int main(int argc, char* argv[]) {
     mem::Arena node_arena = mem::Arena::create(10 MB);
     mem::Arena scope_arena = mem::Arena::create(10 MB);
+    mem::Arena type_arena = mem::Arena::create(10 MB);
+    type::pool = TypePool::create(type_arena);
     Node::init(node_arena);
-    Type* inputs[2] = { type::pool.ctrl(), (Type*) type::pool.bottom(TypeT::Int) };
+    Type* inputs[2] = { type::pool.ctrl, (Type*) type::pool.get_bottom(TypeT::Int) };
     START_NODE = NodeStart::create(Slice<Type*>::from_ptr(inputs, 2));
-    SCOPE_NODE = (NodeScope*) NodeScope::create(scope_arena, NodeProj::create(0, START_NODE));
-    SCOPE_NODE->define("arg"_s, NodeProj::create(1, START_NODE));
+    SCOPE_NODE = NodeScope::create(scope_arena, NodeProj::create(0, START_NODE, true));
+    SCOPE_NODE->define("arg"_s, NodeProj::create(1, START_NODE, false));
+    SCOPE_NODE->define("$1"_s, NodeConst::create(type::pool.mem(type::pool.int_const(0)), START_NODE)); // manually load the alias class $1
     BREAK_SCOPE_NODE = CONTINUE_SCOPE_NODE = nullptr;
     
     // Str src;
@@ -46,8 +52,10 @@ int main(int argc, char* argv[]) {
 
     if(n == nullptr && !p.err())
         std::cout << "Reached end of input file" << std::endl;
-    if(p.err())
+    if(p.err()) {
         printd(p.error);
+        std::cout << "at:\n" << p.t.source.slice(p.t.at, 10) << std::endl;
+    }
 
     SCOPE_NODE->pop();
     // node::print_tree(START_NODE); // not very useful, when `dot` exists

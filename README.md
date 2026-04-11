@@ -155,3 +155,7 @@ continue scope = the active scope after `continue` is called OR while loop loops
 if no `break` or `continue` are present, *the scope from after the entire while body was parsed* is merged with the *scope 
 
 when `continue` is called, the current state of the scope will be merged with the next beginning of the loop scope
+
+## Um
+
+Expensive operations can be scheduled early even if the most common path doesn't use them.

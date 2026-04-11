@@ -8,6 +8,10 @@
 #include "type.h"
 #include "node.h"
 
+#define nonull(expr) { if((expr) == nullptr) return nullptr; }
+// use __TOKEN__ for value of read token
+#define read_token_or_err(expect_token, err_msg) { if(!this->read_token(expect_token)) { error = err_msg; return nullptr; }}
+
 struct Parser {
     Tokenizer t;
     Str error;
@@ -31,8 +35,14 @@ struct Parser {
             // TODO member access here
             todo;
         } else if(t.peek_non_white() == '[') {
-            // TODO index operation here
-            todo;
+            this->read_token(TokenType::LeftBracket);
+            Node* index = this->next_primary_expr(); 
+            if(index == nullptr) return nullptr;
+            if(!this->read_token(TokenType::RightBracket)) { error = "Expected ]"_s; return nullptr; }
+            Node* mem = SCOPE_NODE->find("$1"_s); // TODO hardcoded
+            Node* offset = NodeBinOp::create(Op::Mul, index, NodeConst::create(8, START_NODE)); // TODO hardcoded
+            Node* load_node = NodeLoad::create(1, mem, node, offset); // TODO hardcoded
+            return load_node;
         }
         return node;
     }
@@ -141,10 +151,16 @@ struct Parser {
             case TokenType::VarDecl: {
                 Token var_name = t.next_token();
                 if(!this->read_token(":"_s)) { error = "Expected type when declaring a variable"_s; return nullptr; }
-                Token declared_type = t.next_type(); // TODO
-                if(!this->read_token("="_s)) { error = "Variable declaration without initialization"_s; return nullptr; }
-                Node* initializer_expr = this->next_primary_expr();
-                if(initializer_expr == nullptr) return nullptr;
+                Type* declared_type = this->next_type();
+                if(declared_type == nullptr) return nullptr;
+                Node* initializer_expr;
+                if(t.peek_non_white() == '=') {
+                    this->read_token("="_s); // will succeed
+                    initializer_expr = this->next_primary_expr();
+                    if(initializer_expr == nullptr) return nullptr;
+                } else {
+                    initializer_expr = NodeConst::create(type::default_val(declared_type), START_NODE);
+                }
                 SCOPE_NODE->define(var_name.val, initializer_expr); // Defining var here
                 if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
                 return initializer_expr;
@@ -152,12 +168,36 @@ struct Parser {
             
             // Variable assignment
             case TokenType::Identifier: {
-                if(!this->read_token("="_s)) { error = "Top level expression starting with a identifier has to be assignment"_s; return nullptr; }
-                Node* new_expr = this->next_primary_expr();
-                if(new_expr == nullptr) return nullptr;
-                SCOPE_NODE->update(token.val, new_expr); // Updating var here
-                if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
-                return new_expr;
+                if(t.peek_non_white() == '=') {
+                    this->read_token("="_s);
+                    Node* new_expr = this->next_primary_expr();
+                    if(new_expr == nullptr) return nullptr;
+                    SCOPE_NODE->update(token.val, new_expr); // Updating var here
+                    if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
+                    return new_expr;
+                } else if(t.peek_non_white() == '[') {
+                    this->read_token(TokenType::LeftBracket);
+                    Node* index = this->next_primary_expr(); 
+                    if(index == nullptr) return nullptr;
+                    if(!this->read_token(TokenType::RightBracket)) { error = "Expected ]"_s; return nullptr; }
+                    if(!this->read_token("="_s)) {
+                        error = "Top level expression starting with a identifier has to be assignment"_s;
+                        return nullptr;
+                    }
+                    Node* expr = this->next_primary_expr();
+                    if(expr == nullptr) return nullptr;
+                    expr->keep();
+                    if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
+                    Node* mem = SCOPE_NODE->find("$1"_s); // TODO hardcoded
+                    Node* ptr = SCOPE_NODE->find(token.val);
+                    Node* offset = NodeBinOp::create(Op::Mul, index, NodeConst::create(8, START_NODE)); // TODO hardcoded
+                    expr->unkeep();
+                    Node* store_node = NodeStore::create(1, mem, ptr, offset, expr); // TODO hardcoded
+                    SCOPE_NODE->update("$1"_s, store_node); // TODO hardcoded
+                    return expr;
+                }
+                error = "Top level expression starting with a identifier has to be assignment"_s;
+                return nullptr;
             }
 
             case TokenType::LeftCurly: {
@@ -295,14 +335,15 @@ struct Parser {
     Node* next_if(Token token) {
         if(!this->read_token(TokenType::LeftParenthese)) { error = "expected '(' after 'if'"_s; return nullptr; }
         Node* condition = this->next_primary_expr();
+        if(condition == nullptr) return nullptr;
         if(!this->read_token(TokenType::RightParenthese)) { error = "condition has to end with ')'"_s; return nullptr; }
 
         Node* if_node = NodeIf::create(SCOPE_NODE->ctrl(), condition, token);
 
         // Set up projection nodes
 
-        Node* proj_true = NodeProj::create(0, if_node);
-        Node* proj_false = NodeProj::create(1, if_node);
+        Node* proj_true = NodeProj::create(0, if_node, true);
+        Node* proj_false = NodeProj::create(1, if_node, true);
         // In if true branch, the ifT proj node becomes the ctrl
         // But first clone the scope and set it as current
         NodeScope* scope_false = SCOPE_NODE->duplicate();
@@ -373,13 +414,13 @@ struct Parser {
 
         if(!this->read_token(TokenType::LeftParenthese)) { error = "Expected '(' after 'while'"_s; return nullptr; }
         Node* condition = this->next_primary_expr();
-        if(!this->read_token(TokenType::RightParenthese)) { error = "Expected ')' after 'while' condition"_s; return nullptr; }
         if(condition == nullptr) { return nullptr; }
+        if(!this->read_token(TokenType::RightParenthese)) { error = "Expected ')' after 'while' condition"_s; return nullptr; }
         Node* loop_cond_node = NodeIf::create(SCOPE_NODE->ctrl(), condition, while_token);
         loop_cond_node->keep();
-        Node* proj_t = NodeProj::create(0, loop_cond_node);
+        Node* proj_t = NodeProj::create(0, loop_cond_node, true);
         loop_cond_node->unkeep();
-        Node* proj_f = NodeProj::create(1, loop_cond_node);
+        Node* proj_f = NodeProj::create(1, loop_cond_node, true);
 
         // Break scope has the false projection -> when while condition is false
         // By default has same variables as before entering the loop body -> just duplicate the current scope
@@ -422,6 +463,22 @@ struct Parser {
         // the scope is the exit scope after the exit test.
         SCOPE_NODE = exit_scope;
         return (Node*) SCOPE_NODE;
+    }
+
+    Type* next_type() {
+        Token base_type_t = t.next_type(); // will not include tailing '*' and '[num]'
+        if(base_type_t.val != "i64"_s) { error = "The only supported primitive type is i64"_s; return nullptr; }
+        Type* base_type = type::pool.int_sized(8);
+        if(t.peek_non_white() == '*') { error = "Pointers not supported yet"_s; return nullptr; }
+        if(t.peek_non_white() == '[') {
+            t.at++;
+            Str arr_size_str = t.parse_number_literal();
+            i64 arr_size = str::to_int<i64>(arr_size_str);
+            if(t.peek_non_white() != ']') { error = "Expected ] after number in the type"_s; return nullptr; }
+            t.at++;
+            return type::pool.ptr_to(base_type, arr_size);
+        }
+        return base_type;
     }
 
     // SCOPE_NODE becomes xctrl

@@ -3,7 +3,8 @@
 #include "node.h"
 
 namespace node {
-    bool cfg(Node* n) {
+    bool glb(Node* n) {
+        todo;
         assert(n != nullptr);
         switch(n->nt) {
             case NodeType::Start:
@@ -34,11 +35,10 @@ namespace node {
             case NodeType::AllocA:
                 return false;
             
-            case NodeType::Proj:
-                return false;
-            
-            case NodeType::CtrlProj:
-                return true;
+            case NodeType::Proj: {
+                NodeProj* node = (NodeProj*)n;
+                return node->index == 0 || node->ctrl()->nt == NodeType::If; // TODO make sure there is no better way of doing this
+            }
             
             case NodeType::Undefined:
                 printe("call cfg on undefined node", n);

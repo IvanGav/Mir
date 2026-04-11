@@ -105,9 +105,14 @@ struct Tokenizer {
     // after being called, `source[at]` will be the character right after end of the type
     Str parse_type() {
         Str base = this->parse_identifier();
-        // type can be followed by *
-        // TODO expand to arrays later
-        while(this->peek() == '*') { at++; base.size++; } // very unintended by the `Str`, but should be safe here
+        // // type can be followed by *
+        // while(this->peek_non_white() == '*') { at++; base.size++; } // very unintended by the `Str`, but should be safe here
+        // while(this->peek_non_white() == '[') {
+        //     at++; // consume [
+        //     Str inner = this->parse_number_literal();
+        //     if(this->peek_non_white() != ']') panic; // TODO do better error handling
+        //     at++; // consume ]
+        // }
         return base;
     }
 
@@ -197,7 +202,6 @@ struct Tokenizer {
 
     Token next_type() {
         this->skip_white_and_comment();
-        // if(this->eof()) return Token { source.slice(at, 0), TokenType::EndOfFile }; // TODO delete
         if(this->eof()) return Token::eof;
         Token type_token = { this->parse_type(), TokenType::DataType };
         return type_token;
@@ -207,7 +211,6 @@ struct Tokenizer {
     // Cannot read a binary operator; if you expect a binop to be read, use `Tokenizer::next_binary_op()` instead
     Token next_token() {
         this->skip_white_and_comment();
-        // if(this->eof()) return Token { source.slice(at, 0), TokenType::EndOfFile }; // TODO delete
         if(this->eof()) return Token::eof;
         if(this->peek() == ';') {
             return Token { source.slice(at++, 1), TokenType::EndOfLine };

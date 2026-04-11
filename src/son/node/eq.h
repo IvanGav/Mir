@@ -24,10 +24,14 @@ namespace node {
             case NodeType::Greater:
             case NodeType::LessEq:
             case NodeType::GreaterEq:
+            case NodeType::Load:
+            case NodeType::Store:
+            case NodeType::AllocA:
             case NodeType::Neg: {
                 return left->input == right->input;
             }
             
+            case NodeType::CtrlProj:
             case NodeType::Proj: {
                 NodeProj* ln = (NodeProj*)(left);
                 NodeProj* rn = (NodeProj*)(right);

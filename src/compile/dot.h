@@ -43,6 +43,7 @@ namespace compile {
                 break;
             }
             
+            case NodeType::CtrlProj:
             case NodeType::Proj: {
                 NodeProj* node = (NodeProj*) n;
                 Str uid = str::from_int(n->uid);
@@ -99,6 +100,24 @@ namespace compile {
                 output.push_slice(str::from_slice_of_str(s));
                 break;
             }
+
+            case NodeType::Load: {
+                Str uid = str::from_int(n->uid);
+                output.push_slice(str::cat(uid, " [label=\""_s, "load"_s, "\"];\n"_s));
+                break;
+            }
+            
+            case NodeType::Store: {
+                Str uid = str::from_int(n->uid);
+                output.push_slice(str::cat(uid, " [label=\""_s, "store"_s, "\"];\n"_s));
+                break;
+            }
+
+            case NodeType::AllocA: {
+                Str uid = str::from_int(n->uid);
+                output.push_slice(str::cat(uid, " [label=\""_s, "alloca"_s, "\"];\n"_s));
+                break;
+            }
             
             case NodeType::Undefined:
                 printe("call compile to dot on undefined node", n);
@@ -139,6 +158,17 @@ namespace compile {
                 break;
             }
             
+            case NodeType::CtrlProj: {
+                NodeProj* node = (NodeProj*) n;
+                Str uid = str::from_int(n->uid);
+                Str src_uid = str::from_int(node->ctrl()->uid);
+                Slice<Str> s = Vec<Str>::with(
+                    src_uid, " -> "_s, uid, " [style=dotted];\n"_s
+                ).full_slice();
+                output.push_slice(str::from_slice_of_str(s));
+                break;
+            }
+
             case NodeType::Proj: {
                 NodeProj* node = (NodeProj*) n;
                 Str uid = str::from_int(n->uid);
@@ -227,6 +257,40 @@ namespace compile {
                     rhs_uid, " -> "_s, uid, ";\n"_s
                 ).full_slice();
                 output.push_slice(str::from_slice_of_str(s));
+                break;
+            }
+
+            case NodeType::Load: {
+                NodeLoad* node = (NodeLoad*) n;
+                Str uid = str::from_int(n->uid);
+                output.push_slice(str::cat(
+                    str::from_int(node->mem()->uid), " -> "_s, uid, " [label=\"mem\"];\n"_s,
+                    str::from_int(node->ptr()->uid), " -> "_s, uid, " [label=\"ptr\"];\n"_s,
+                    str::from_int(node->off()->uid), " -> "_s, uid, " [label=\"off\"];\n"_s
+                ));
+                break;
+            }
+            
+            case NodeType::Store: {
+                NodeStore* node = (NodeStore*) n;
+                Str uid = str::from_int(n->uid);
+                output.push_slice(str::cat(
+                    str::from_int(node->mem()->uid), " -> "_s, uid, " [label=\"mem\"];\n"_s,
+                    str::from_int(node->ptr()->uid), " -> "_s, uid, " [label=\"ptr\"];\n"_s,
+                    str::from_int(node->off()->uid), " -> "_s, uid, " [label=\"off\"];\n"_s,
+                    str::from_int(node->val()->uid), " -> "_s, uid, " [label=\"val\"];\n"_s
+                ));
+                break;
+            }
+
+            case NodeType::AllocA: {
+                NodeAllocA* node = (NodeAllocA*) n;
+                Str uid = str::from_int(n->uid);
+                output.push_slice(str::cat(
+                    str::from_int(node->ctrl()->uid), " -> "_s, uid, " [label=\"ptr\"];\n"_s,
+                    str::from_int(node->mem()->uid), " -> "_s, uid, " [label=\"mem\"];\n"_s,
+                    str::from_int(node->size()->uid), " -> "_s, uid, " [label=\"size\"];\n"_s
+                ));
                 break;
             }
             

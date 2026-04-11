@@ -10,6 +10,7 @@ std::ostream& operator<<(std::ostream& os, NodeType nt) {
         case NodeType::Start:       return os << "Start";
         case NodeType::Ret:         return os << "Ret";
         case NodeType::Proj:        return os << "Proj";
+        case NodeType::CtrlProj:    return os << "CtrlProj";
         case NodeType::If:          return os << "If";
         case NodeType::Region:      return os << "Region";
         case NodeType::Phi:         return os << "Phi";
@@ -26,6 +27,9 @@ std::ostream& operator<<(std::ostream& os, NodeType nt) {
         case NodeType::LessEq:      return os << "LessEq";
         case NodeType::GreaterEq:   return os << "GreaterEq";
         case NodeType::Neg:         return os << "Neg";
+        case NodeType::Load:        return os << "Load";
+        case NodeType::Store:       return os << "Store";
+        case NodeType::AllocA:      return os << "AllocA";
     }
     unreachable;
 }
@@ -79,6 +83,7 @@ std::ostream& operator<<(std::ostream& os, Node* n) {
             return os;
         }
 
+        case NodeType::CtrlProj:
         case NodeType::Proj: {
             NodeProj* node = (NodeProj*) n;
             os << "\tindex = " << node->index << "\n";
@@ -115,6 +120,28 @@ std::ostream& operator<<(std::ostream& os, Node* n) {
             os << "\trhs = " << node->rhs()->uid << "\n";
             return os;
         }
+
+        case NodeType::Load: {
+            NodeLoad* node = (NodeLoad*) n;
+            os << "\talias = " << node->mem_alias << "\n";
+            os << "\tmem = " << node->mem()->uid << "\n";
+            os << "\tptr = " << node->ptr()->uid << "\n";
+            os << "\toff = " << node->off()->uid << "\n";
+            return os;
+        }
+
+        case NodeType::Store: {
+            NodeStore* node = (NodeStore*) n;
+            os << "\talias = " << node->mem_alias << "\n";
+            os << "\tmem = " << node->mem()->uid << "\n";
+            os << "\tptr = " << node->ptr()->uid << "\n";
+            os << "\toff = " << node->off()->uid << "\n";
+            os << "\tval = " << node->val()->uid << "\n";
+            return os;
+        }
+
+        case NodeType::AllocA:
+            todo;
         
         case NodeType::Scope: {
             // NodeScope* node = (NodeScope*) n;

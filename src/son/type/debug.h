@@ -9,6 +9,112 @@
 #include "type_def.h"
 #include "type_pool.h"
 
+namespace type {
+    Str to_str(TypeI ti) {
+        switch (ti) {
+            case TypeI::Top:    return "Top"_s;
+            case TypeI::Known:  return "Known"_s;
+            case TypeI::Bottom: return "Bottom"_s;
+        }
+        unreachable;
+    }
+
+    Str to_str(TypeT tt) {
+        switch (tt) {
+            case TypeT::Pure:   return "Pure"_s;
+            case TypeT::Ctrl:   return "Crtl"_s;
+            case TypeT::Bool:   return "Bool"_s;
+            case TypeT::Int:    return "Int"_s;
+            case TypeT::Float:  return "Float"_s;
+            case TypeT::Tuple:  return "Tuple"_s;
+            case TypeT::Ptr:    return "Ptr"_s;
+            case TypeT::Mem:    return "Mem"_s;
+        }
+        unreachable;
+    }
+    Str to_str(Type* t) {
+        assert(t != nullptr);
+        switch (t->ttype) {
+            case TypeT::Pure: {
+                return type::to_str(t->tinfo);
+            }
+            
+            case TypeT::Ctrl: {
+                if(t->tinfo == TypeI::Bottom)
+                    return "Ctrl"_s;
+                return "XCtrl"_s;
+            }
+
+            case TypeT::Bool: {
+                TypeInt* ty = reinterpret_cast<TypeInt*>(t);
+                if(ty->self.tinfo == TypeI::Top) 
+                    return "Bool:Top"_s;
+                else if(ty->self.tinfo == TypeI::Bottom) 
+                    return "Bool:Bottom"_s;
+                else if(ty->val_min == 0 && ty->val_max == 0)
+                    return "false"_s;
+                else if(ty->val_min == 1 && ty->val_max == 1)
+                    return "true"_s;
+                else if(ty->val_min == 0 && ty->val_max == 1)
+                    return "Bool:any"_s;
+                else
+                    panic;
+            }
+            case TypeT::Int: {
+                TypeInt* ty = reinterpret_cast<TypeInt*>(t);
+                if(ty->self.tinfo == TypeI::Top) 
+                    return "Int:Top"_s;
+                else if(ty->self.tinfo == TypeI::Bottom) 
+                    return "Int:Bottom"_s;
+                else if(ty->val_min == ty->val_max)
+                    return str::from_slice_of_str(ref(Vec<Str>::with("Int:"_s, str::from_int(ty->val_min)).full_slice()));
+                else
+                    return str::from_slice_of_str(ref(Vec<Str>::with("Int:"_s, str::from_int(ty->val_min), "..="_s, str::from_int(ty->val_max)).full_slice()));
+            }
+
+            case TypeT::Float: {
+                TypeFloat* ty = reinterpret_cast<TypeFloat*>(t);
+                if(ty->self.tinfo == TypeI::Top) 
+                    return "Float:Top"_s;
+                else if(ty->self.tinfo == TypeI::Bottom) 
+                    return "Float:Bottom"_s;
+                else if(ty->val_min == ty->val_max)
+                    return str::from_slice_of_str(ref(Vec<Str>::with("Float:"_s, "UNIMPLEMENTED"_s).full_slice()));
+                else
+                    return str::from_slice_of_str(ref(Vec<Str>::with("Float:"_s, "UNIMPLEMENTED"_s, "..="_s, "UNIMPLEMENTED"_s).full_slice()));
+            }
+
+            case TypeT::Tuple: {
+                // TypeTuple* ty = reinterpret_cast<TypeTuple*>(t);
+                return "Tuple TODO"_s;
+            }
+
+            case TypeT::Mem:
+            case TypeT::Ptr: {
+                TypePtr* ty = reinterpret_cast<TypePtr*>(t);
+                if(ty->self.tinfo == TypeI::Top) 
+                    return "null"_s;
+                else if(ty->self.tinfo == TypeI::Bottom) 
+                    return "void*"_s;
+                else
+                    return str::from_slice_of_str(ref(Vec<Str>::with(to_str(t->ttype), ":"_s, to_str(ty->ptr)).full_slice()));
+            }
+        }
+        unreachable;
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, TypeI ti) {
+    return os << type::to_str(ti);
+}
+std::ostream& operator<<(std::ostream& os, TypeT tt) {
+    return os << type::to_str(tt);
+}
+std::ostream& operator<<(std::ostream& os, Type* t) {
+    return os << type::to_str(t);
+}
+
+/*
 std::ostream& operator<<(std::ostream& os, TypeI ti) {
     switch (ti) {
         case TypeI::Top:    return os << "Top";
@@ -26,6 +132,8 @@ std::ostream& operator<<(std::ostream& os, TypeT tt) {
         case TypeT::Int:    return os << "Int";
         case TypeT::Float:  return os << "Float";
         case TypeT::Tuple:  return os << "Tuple";
+        case TypeT::Ptr:    return os << "Ptr";
+        case TypeT::Mem:    return os << "Mem";
     }
     unreachable;
 }
@@ -93,88 +201,14 @@ std::ostream& operator<<(std::ostream& os, Type* t) {
             os << "]>";
             return os;
         }
+
+        case TypeT::Mem:
+        case TypeT::Ptr: {
+            TypePtr* ty = reinterpret_cast<TypePtr*>(t);
+            os << "<" << type::to_str(t->tinfo) << ":" << t->tinfo << ty->ptr << ">";
+            return os;
+        }
     }
     unreachable;
 }
-
-namespace type {
-    Str to_str(TypeI ti) {
-        switch (ti) {
-            case TypeI::Top:    return "Top"_s;
-            case TypeI::Known:  return "Known"_s;
-            case TypeI::Bottom: return "Bottom"_s;
-        }
-        unreachable;
-    }
-
-    Str to_str(TypeT tt) {
-        switch (tt) {
-            case TypeT::Pure:   return "Pure"_s;
-            case TypeT::Ctrl:   return "Crtl"_s;
-            case TypeT::Bool:   return "Bool"_s;
-            case TypeT::Int:    return "Int"_s;
-            case TypeT::Float:  return "Float"_s;
-            case TypeT::Tuple:  return "Tuple"_s;
-        }
-        unreachable;
-    }
-    Str to_str(Type* t) {
-        assert(t != nullptr);
-        switch (t->ttype) {
-            case TypeT::Pure: {
-                return type::to_str(t->tinfo);
-            }
-            
-            case TypeT::Ctrl: {
-                if(t->tinfo == TypeI::Bottom)
-                    return "Ctrl"_s;
-                return "XCtrl"_s;
-            }
-
-            case TypeT::Bool: {
-                TypeInt* ty = reinterpret_cast<TypeInt*>(t);
-                if(ty->self.tinfo == TypeI::Top) 
-                    return "Bool:Top"_s;
-                else if(ty->self.tinfo == TypeI::Bottom) 
-                    return "Bool:Bottom"_s;
-                else if(ty->val_min == 0 && ty->val_max == 0)
-                    return "false"_s;
-                else if(ty->val_min == 1 && ty->val_max == 1)
-                    return "true"_s;
-                else if(ty->val_min == 0 && ty->val_max == 1)
-                    return "Bool:any"_s;
-                else
-                    panic;
-            }
-            case TypeT::Int: {
-                TypeInt* ty = reinterpret_cast<TypeInt*>(t);
-                if(ty->self.tinfo == TypeI::Top) 
-                    return "Int:Top"_s;
-                else if(ty->self.tinfo == TypeI::Bottom) 
-                    return "Int:Bottom"_s;
-                else if(ty->val_min == ty->val_max)
-                    return str::from_slice_of_str(ref(Vec<Str>::with("Int:"_s, str::from_int(ty->val_min)).full_slice()));
-                else
-                    return str::from_slice_of_str(ref(Vec<Str>::with("Int:"_s, str::from_int(ty->val_min), "..="_s, str::from_int(ty->val_max)).full_slice()));
-            }
-
-            case TypeT::Float: {
-                TypeFloat* ty = reinterpret_cast<TypeFloat*>(t);
-                if(ty->self.tinfo == TypeI::Top) 
-                    return "Float:Top"_s;
-                else if(ty->self.tinfo == TypeI::Bottom) 
-                    return "Float:Bottom"_s;
-                else if(ty->val_min == ty->val_max)
-                    return str::from_slice_of_str(ref(Vec<Str>::with("Float:"_s, "UNIMPLEMENTED"_s).full_slice()));
-                else
-                    return str::from_slice_of_str(ref(Vec<Str>::with("Float:"_s, "UNIMPLEMENTED"_s, "..="_s, "UNIMPLEMENTED"_s).full_slice()));
-            }
-
-            case TypeT::Tuple: {
-                // TypeTuple* ty = reinterpret_cast<TypeTuple*>(t);
-                return "Tuple TODO"_s;
-            }
-        }
-        unreachable;
-    }
-};
+*/

@@ -21,13 +21,16 @@ enum class TypeI {
 enum class TypeT {
     // Generic
     Pure, // Type (either `let mystery;` with assignment later down the line OR meet of incompatible types)
-    Ctrl, // Type
+    Ctrl, // Type (Ctrl:Bottom is Ctrl and Ctrl:Top is XCtrl)
 
     // Specialized
     Bool, Int, // TypeInt
     Float, // TypeFloat
+    Ptr, // TypePtr (represents reference to memory -> variable) (Ptr:Top is null and Ptr:Bottom is unknown type (void*))
+    
+    // Internal
     Tuple, // TypeTuple
-    Ptr, // TypePtr
+    Mem, // TypePtr (represents contents of memory)
 };
 
 struct Type {
@@ -74,6 +77,7 @@ struct TypeTuple {
 struct TypePtr {
     Type self;
     Type* ptr;
+    u32 size;
     bool operator==(const TypePtr&) const = default;
     u64 hash() { return type::hash((Type*)this); }
 };

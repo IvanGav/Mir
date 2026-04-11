@@ -10,6 +10,10 @@ namespace node {
         assert(n->nt != NodeType::Undefined);
         n->type = node::compute(n); // compute n's best known type
 
+        #ifdef NOOPTS
+        return n;
+        #endif
+
         Node* idealized = node::idealize(n);
         
         // no better representation

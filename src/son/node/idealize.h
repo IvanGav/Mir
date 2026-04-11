@@ -40,13 +40,13 @@ namespace node {
             case NodeType::Start:
             case NodeType::If:
             case NodeType::Ret:
+            case NodeType::CtrlProj:
             case NodeType::Proj:
             case NodeType::Const:
             return nullptr;
 
-            case NodeType::Region: {
+            case NodeType::Region:
                 return nullptr;
-            }
 
 
             case NodeType::Phi: {
@@ -235,6 +235,11 @@ namespace node {
 
             case NodeType::Neg:
                 return nullptr;
+
+            case NodeType::Load:
+            case NodeType::Store:
+            case NodeType::AllocA:
+                return nullptr; // TODO
             
             case NodeType::Undefined:
                 printe("call idealize on undefined node", n);

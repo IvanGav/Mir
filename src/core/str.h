@@ -50,6 +50,19 @@ namespace str {
         return combined;
     }
 
+    template <typename... Args>
+    Str cat(mem::Arena& arena, Args&&... strs) {
+        mem::Arena scratch = mem::Arena::create(10 KB);
+        Vec<Str> vec = Vec<Str>::create(scratch);
+        (vec.push(std::forward<Args>(strs)), ...);
+        return str::from_slice_of_str(ref(vec.full_slice()), arena);
+    }
+
+    template <typename... Args>
+    Str cat(Args&&... strs) {
+        return str::cat(default_arena, std::forward<Args>(strs)...);
+    }
+
     template <typename T>
     Str from_int(T num, mem::Arena& arena = default_arena) {
         Vec<u8> v {.arena = &arena};

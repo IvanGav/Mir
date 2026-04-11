@@ -3,16 +3,16 @@
 #include "node.h"
 
 namespace node {
-    bool cfg(Node* n) {
+    bool pinned(Node* n) {
         assert(n != nullptr);
         switch(n->nt) {
             case NodeType::Start:
             case NodeType::Ret:
             case NodeType::If:
             case NodeType::Region:
+            case NodeType::CtrlProj:
                 return true;
-            
-            case NodeType::Scope:
+
             case NodeType::Const:
             case NodeType::Add:
             case NodeType::Sub:
@@ -26,22 +26,21 @@ namespace node {
             case NodeType::LessEq:
             case NodeType::GreaterEq:
             case NodeType::Neg:
-            case NodeType::Phi:
-                return false;
-            
-            case NodeType::Load:
-            case NodeType::Store:
-            case NodeType::AllocA:
                 return false;
             
             case NodeType::Proj:
-                return false;
-            
-            case NodeType::CtrlProj:
+            case NodeType::Load:
+            case NodeType::Store:
+            case NodeType::AllocA:
+            case NodeType::Phi:
                 return true;
             
+            case NodeType::Scope:
+                printe("call pinned on scope node", n);
+                panic;
+
             case NodeType::Undefined:
-                printe("call cfg on undefined node", n);
+                printe("call pinned on undefined node", n);
                 panic;
         }
         unreachable;

@@ -31,6 +31,11 @@ namespace type {
                 TypeTuple* ty = reinterpret_cast<TypeTuple*>(t);
                 return ty->self.tinfo == TypeI::Top; // TODO really?
             }
+
+            case TypeT::Mem:
+            case TypeT::Ptr: {
+                return false;
+            }
         }
         unreachable;
     }

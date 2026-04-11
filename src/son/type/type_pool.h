@@ -11,45 +11,51 @@
 struct TypePool {
     mem::Arena* type_arena;
 
-    HSet<Type> s_type;
-    // Type bottom; Type top; Type ctrl; Type xctlr;
+    Type* bottom; Type* top; Type* ctrl; Type* xctrl;
     HSet<TypeInt> s_type_int;
     HSet<TypeFloat> s_type_float;
     HSet<TypeTuple> s_type_tuple;
+    HSet<TypePtr> s_type_ptr;
 
-    Type* request(Type t) {
-        s_type.add(t);
-        assert(s_type.get(t) != nullptr);
-        return s_type.get(t);
-    }
-    Type* bottom() {
-        return this->request(Type { .tinfo=TypeI::Bottom, .ttype=TypeT::Pure });
-    }
-    Type* top() {
-        return this->request(Type { .tinfo=TypeI::Top, .ttype=TypeT::Pure });
-    }
-    Type* ctrl() {
-        return this->request(Type { .tinfo=TypeI::Bottom, .ttype=TypeT::Ctrl });
-    }
-    Type* xctrl() {
-        return this->request(Type { .tinfo=TypeI::Top, .ttype=TypeT::Ctrl });
+    static TypePool create(mem::Arena& type_arena) {
+        return TypePool {
+            .type_arena = &type_arena,
+            .bottom =   type_arena.push<Type>({ .tinfo=TypeI::Bottom, .ttype=TypeT::Pure }),
+            .top =      type_arena.push<Type>({ .tinfo=TypeI::Top, .ttype=TypeT::Pure }),
+            .ctrl =     type_arena.push<Type>({ .tinfo=TypeI::Bottom, .ttype=TypeT::Ctrl }),
+            .xctrl =    type_arena.push<Type>({ .tinfo=TypeI::Top, .ttype=TypeT::Ctrl }),
+            .s_type_int =   HSet<TypeInt>::create(type_arena),
+            .s_type_float = HSet<TypeFloat>::create(type_arena),
+            .s_type_tuple = HSet<TypeTuple>::create(type_arena),
+            .s_type_ptr =   HSet<TypePtr>::create(type_arena)
+        };
     }
 
-    Type* bottom(TypeT tt) {
+    Type* get_bottom(TypeT tt) {
+        Type t = Type { .tinfo=TypeI::Bottom, .ttype=tt };
         switch(tt) {
-            case TypeT::Pure: case TypeT::Ctrl: return this->request(Type { .tinfo=TypeI::Bottom, .ttype=tt });
-            case TypeT::Bool: case TypeT::Int:  return (Type*) this->get_int(TypeInt { .self = Type { .tinfo=TypeI::Bottom, .ttype=tt } });
-            case TypeT::Float:                  return (Type*) this->get_float(TypeFloat { .self = Type { .tinfo=TypeI::Bottom, .ttype=tt } });
-            case TypeT::Tuple:                  return (Type*) this->get_tuple(TypeTuple { .self = Type { .tinfo=TypeI::Bottom, .ttype=tt } });
+            case TypeT::Pure:   return bottom;
+            case TypeT::Ctrl:   return ctrl;
+            case TypeT::Bool: 
+            case TypeT::Int:    return (Type*) this->get_int(TypeInt { .self = t });
+            case TypeT::Float:  return (Type*) this->get_float(TypeFloat { .self = t });
+            case TypeT::Tuple:  return (Type*) this->get_tuple(TypeTuple { .self = t });
+            case TypeT::Ptr:    return (Type*) this->get_ptr(TypePtr { .self = t, .ptr = top });
+            case TypeT::Mem:    return (Type*) this->get_ptr(TypePtr { .self = t, .ptr = top });
         }
         unreachable;
     }
-    Type* top(TypeT tt) {
+    Type* get_top(TypeT tt) {
+        Type t = Type { .tinfo=TypeI::Top, .ttype=tt };
         switch(tt) {
-            case TypeT::Pure: case TypeT::Ctrl: return this->request(Type { .tinfo=TypeI::Top, .ttype=tt });
-            case TypeT::Bool: case TypeT::Int:  return (Type*) this->get_int(TypeInt { .self = Type { .tinfo=TypeI::Top, .ttype=tt } });
-            case TypeT::Float:                  return (Type*) this->get_float(TypeFloat { .self = Type { .tinfo=TypeI::Top, .ttype=tt } });
-            case TypeT::Tuple:                  return (Type*) this->get_tuple(TypeTuple { .self = Type { .tinfo=TypeI::Top, .ttype=tt } });
+            case TypeT::Pure:   return top;
+            case TypeT::Ctrl:   return xctrl;
+            case TypeT::Bool: 
+            case TypeT::Int:    return (Type*) this->get_int(TypeInt { .self = t });
+            case TypeT::Float:  return (Type*) this->get_float(TypeFloat { .self = t });
+            case TypeT::Tuple:  return (Type*) this->get_tuple(TypeTuple { .self = t });
+            case TypeT::Ptr:    return (Type*) this->get_ptr(TypePtr { .self = t, .ptr = bottom });
+            case TypeT::Mem:    return (Type*) this->get_ptr(TypePtr { .self = t, .ptr = bottom });
         }
         unreachable;
     }
@@ -77,7 +83,10 @@ struct TypePool {
         return (Type*) this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .val_min = std::bit_cast<i64>(min), .val_max = std::bit_cast<i64>(max)});
     }
     Type* int_const(i64 val) {
-        return (Type*) this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .val_min = std::bit_cast<i64>(val), .val_max = std::bit_cast<i64>(val) });
+        return (Type*) this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .val_min = val, .val_max = val });
+    }
+    Type* int_range(i64 min, i64 max) {
+        return (Type*) this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .val_min = min, .val_max = max });
     }
     Type* get_int(TypeInt t) {
         s_type_int.add(t);
@@ -102,11 +111,6 @@ struct TypePool {
             Slice<Type*> slice_deep_clone = Vec<Type*>::clone_slice(t.val, *type_arena).full_slice();
             TypeTuple deep_clone = TypeTuple { .self = t.self, .val = slice_deep_clone};
             s_type_tuple.add(deep_clone);
-            // std::cout << "Deep: " << deep_clone.self.hash() << std::endl;
-            // std::cout << "Given:" << t.self.hash() << std::endl;
-            // s_type_tuple.get(deep_clone);
-            // s_type_tuple.get(t);
-            // std::cout << "__________" << std::endl;
         }
         assert(s_type_tuple.get(t) != nullptr);
         return (Type*) s_type_tuple.get(t);
@@ -114,6 +118,23 @@ struct TypePool {
     
     Type* from_slice(Slice<Type*> args) {
         return (Type*) this->get_tuple(TypeTuple { .self = Type::known(TypeT::Tuple), .val = args });
+    }
+
+    // pottier
+    Type* get_ptr(TypePtr t) {
+        assert(t.ptr != nullptr);
+        s_type_ptr.add(t);
+        assert(s_type_ptr.get(t) != nullptr);
+        return (Type*) s_type_ptr.get(t);
+    }
+    Type* ptr_to(Type* t, u32 size) {
+        return this->get_ptr(TypePtr { .self = { .tinfo = TypeI::Known, .ttype = TypeT::Ptr }, .ptr = t, .size = size });
+    }
+    Type* ptr_null(u32 size) {
+        return this->get_ptr(TypePtr { .self = { .tinfo = TypeI::Top, .ttype = TypeT::Ptr }, .ptr = this->bottom, .size = size });
+    }
+    Type* mem(Type* t) {
+        return this->get_ptr(TypePtr { .self = { .tinfo = TypeI::Known, .ttype = TypeT::Mem }, .ptr = t, .size = 1 });
     }
 };
 
