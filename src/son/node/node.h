@@ -151,6 +151,7 @@ struct NodeUnOp {
 };
 
 // self.nt == Proj OR CtrlProj
+// Note that "ctrl" may not be a literal cfg node, in the future. It is for now, but if I project the struct field values...
 struct NodeProj {
     // self.input = [ctrl]
     Node self;

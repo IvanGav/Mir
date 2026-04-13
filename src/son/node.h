@@ -6,6 +6,7 @@
 #include "node/cfg.h"
 #include "node/idom.h"
 #include "node/debug.h"
+#include "node/pinned.h"
 #include "node/compute.h"
 #include "node/peephole.h"
 #include "node/idealize.h"
