@@ -51,8 +51,8 @@ namespace node {
 
             case NodeType::Phi: {
                 NodePhi* node = (NodePhi*) n;
-                if(node->incomplete() || 
-                    (node->region()->nt == NodeType::Region && ((NodeRegion*)node->region())->incomplete())
+                if(node->is_incomplete() || 
+                    (node->region()->nt == NodeType::Region && ((NodeRegion*)node->region())->is_incomplete())
                 ) { return nullptr; } // self of region is incomplete; don't optimize yet
 
                 Node* maybe_single = node->single_unique_input();

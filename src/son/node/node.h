@@ -218,7 +218,7 @@ struct NodeRegion {
     
     // Other helpers
     // return true if not yet constructed fully
-    bool incomplete() {
+    bool is_incomplete() {
         return this->ctrl(this->ctrl_size()-1) == nullptr;
     }
 };
@@ -278,7 +278,7 @@ struct NodePhi {
         this->self.set_input(2, data2);
     }
     // return true if not yet constructed fully
-    bool incomplete() {
+    bool is_incomplete() {
         return this->data(this->data_size()-1) == nullptr;
     }
     // return true if all data nodes' `node->nt` have the same value
@@ -518,14 +518,14 @@ struct NodeScope {
         assert(!self.is_dead() && !this->is_xctrl()); // head must be alive
         assert(back != this && back != exit && exit != this);
         NodeRegion* cur_ctrl = (NodeRegion*)this->ctrl(); // technically unsafe
-        assert(cur_ctrl->self.nt == NodeType::Region && cur_ctrl->incomplete());
+        assert(cur_ctrl->self.nt == NodeType::Region && cur_ctrl->is_incomplete());
         cur_ctrl->complete(back->ctrl());
         for(u32 i = 1; i < self.input.size; i++) {
             if(back->self.input[i] != (Node*)this) {
                 // will be a lazy phi
                 NodePhi* phi = (NodePhi*)self.input[i]; // technically might be unsafe, but should always be true
                 assert(phi->self.nt == NodeType::Phi);
-                assert(phi->region() == (Node*)cur_ctrl && phi->incomplete());
+                assert(phi->region() == (Node*)cur_ctrl && phi->is_incomplete());
                 phi->complete(back->self.input[i]);
             }
             if(exit->self.input[i] == (Node*)this) // Replace a lazy-phi on the exit path too

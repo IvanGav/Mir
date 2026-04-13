@@ -58,14 +58,17 @@ typedef double f64;
 
 #define todo { std::cout << ("UNIMPLEMENTED\n"); assert(false); std::abort(); }
 
-#define min(a, b) a > b ? b : a
-#define max(a, b) a > b ? a : b
-
 #define ceil_div(num, denom) (num/denom + (num%denom != 0))
 
 #define printd(expr) std::cout << "--DEBUG " #expr ": " << (expr) << std::endl;
 
 #define printe(message, expr) std::cout << "--ERROR " message ": " << (expr) << std::endl;
+
+template <typename T>
+T max(T a, T b) { return a > b ? a : b; }
+
+template <typename T>
+T min(T a, T b) { return a < b ? a : b; }
 
 usize next_power_of_two(usize n) {
     assert(sizeof(usize) == sizeof(unsigned long long));

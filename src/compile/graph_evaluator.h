@@ -32,7 +32,8 @@ struct Evaluator {
 
     static Node* find_projection(Node* node, u32 i) {
         for(Node* output : node->output) {
-            if(output->nt == NodeType::Proj && ((NodeProj*)output)->index == i) return output;
+            if((output->nt == NodeType::CtrlProj || output->nt == NodeType::Proj) && ((NodeProj*)output)->index == i)
+                return output;
         }
         return nullptr;
     }
@@ -45,7 +46,7 @@ struct Evaluator {
             case NodeType::Const: {
                 NodeConst* c_node = (NodeConst*) node;
                 Type* c_type = c_node->val;
-                assert(c_type->ttype == TypeT::Int);
+                assert(c_type->ttype == TypeT::Int); // can be TypeT::Mem
                 TypeInt* int_type = (TypeInt*) c_type;
                 return int_type->val();
             }
@@ -115,6 +116,7 @@ struct Evaluator {
      * Run the graph until either a return is found or the number of loop iterations are done.
      */
     u64 evaluate(Node* start, u64 parameter, u32 loops) {
+        assert(node::cfg(start));
         Node* parameter1 = this->find_projection(start, 1);
         if(parameter1 != nullptr) cache_values.add(parameter1, parameter);
         Node* control = this->find_projection(start, 0);
@@ -143,7 +145,7 @@ struct Evaluator {
                     NodeRet* ret = (NodeRet*) control;
                     return this->get_value(ret->expr());
                 }
-                case NodeType::Proj: {
+                case NodeType::CtrlProj: {
                     next = this->find_control(control);
                     break;
                 }

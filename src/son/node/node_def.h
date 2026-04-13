@@ -81,6 +81,9 @@ struct Node {
     u64 hash; // cached hash; for general speedup on gvn lookup
     bool locked; // cannot modify inputs or type because of GVN
 
+    u32 loop_depth;
+    u32 dom_depth;
+
     inline static u32 uid_counter = 0;
     inline static mem::Arena* node_arena = nullptr;
     // inline static GVN gvn = {}; // global value numbering

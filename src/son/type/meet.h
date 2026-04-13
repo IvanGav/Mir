@@ -32,21 +32,21 @@ namespace type {
             case TypeT::Int: {
                 TypeInt* ti1 = reinterpret_cast<TypeInt*>(t1);
                 TypeInt* ti2 = reinterpret_cast<TypeInt*>(t2);
-                i64 min = max(ti1->val_min, ti2->val_min);
-                i64 max = min(ti1->val_max, ti2->val_max);
-                if(min > max)
+                i64 minv = max(ti1->val_min, ti2->val_min);
+                i64 maxv = min(ti1->val_max, ti2->val_max);
+                if(minv > maxv)
                     return pool.get_int( TypeInt { .self = Type { .tinfo = TypeI::Bottom, .ttype = ti1->self.ttype } } );
-                return pool.get_int( TypeInt { .self = Type { .tinfo = TypeI::Known, .ttype = ti1->self.ttype }, .val_min = min, .val_max = max } );
+                return pool.get_int( TypeInt { .self = Type { .tinfo = TypeI::Known, .ttype = ti1->self.ttype }, .val_min = minv, .val_max = maxv } );
             }
 
             case TypeT::Float: {
                 TypeFloat* tf1 = reinterpret_cast<TypeFloat*>(t1);
                 TypeFloat* tf2 = reinterpret_cast<TypeFloat*>(t2);
-                f64 min = max(tf1->val_min, tf2->val_min);
-                f64 max = min(tf1->val_max, tf2->val_max);
-                if(min > max)
+                f64 minv = max(tf1->val_min, tf2->val_min);
+                f64 maxv = min(tf1->val_max, tf2->val_max);
+                if(minv > maxv)
                     return pool.get_float( TypeFloat { .self = Type { .tinfo = TypeI::Bottom, .ttype = tf1->self.ttype } } );
-                return pool.get_float( TypeFloat { .self = Type { .tinfo = TypeI::Known, .ttype = tf1->self.ttype }, .val_min = min, .val_max = max } );
+                return pool.get_float( TypeFloat { .self = Type { .tinfo = TypeI::Known, .ttype = tf1->self.ttype }, .val_min = minv, .val_max = maxv } );
             }
 
             case TypeT::Tuple: {

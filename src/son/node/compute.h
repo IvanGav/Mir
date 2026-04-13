@@ -35,7 +35,7 @@ namespace node {
 
             case NodeType::Phi: {
                 NodePhi* node = (NodePhi*)(n);
-                if(node->region()->nt != NodeType::Region || ((NodeRegion*) (node->region()))->incomplete()) {
+                if(node->region()->nt != NodeType::Region || ((NodeRegion*) (node->region()))->is_incomplete()) {
                     // return node::glb(node->data(0)->type);
                     Type* t = node->data(0)->type;
                     if(t->ttype == TypeT::Mem) {
