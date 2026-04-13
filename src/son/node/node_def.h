@@ -24,7 +24,7 @@ enum class NodeType {
     Proj,
 
     // Control
-    Start, Ret,
+    Start, Stop, Ret,
     If, Region,
     CtrlProj,
 

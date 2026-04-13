@@ -9,6 +9,7 @@ struct NodeScope;
 // Special nodes
 Node* VOID_NODE;
 Node* START_NODE;
+Node* STOP_NODE;
 
 // Scope nodes
 NodeScope* SCOPE_NODE;

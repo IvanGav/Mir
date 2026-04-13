@@ -31,6 +31,7 @@ int main(int argc, char* argv[]) {
     Node::init(node_arena);
     Type* inputs[2] = { type::pool.ctrl, (Type*) type::pool.get_bottom(TypeT::Int) };
     START_NODE = NodeStart::create(Slice<Type*>::from_ptr(inputs, 2));
+    STOP_NODE = NodeStop::create();
     SCOPE_NODE = NodeScope::create(scope_arena, NodeProj::create(0, START_NODE, true));
     SCOPE_NODE->define("arg"_s, NodeProj::create(1, START_NODE, false));
     SCOPE_NODE->define("$1"_s, NodeConst::create(type::pool.mem(type::pool.int_const(0)), START_NODE)); // manually load the alias class $1
@@ -48,10 +49,8 @@ int main(int argc, char* argv[]) {
     Node* n = nullptr;
     do {
         n = p.next_top_level_expr();
-    } while(n != nullptr && n->nt != NodeType::Ret);
-
-    if(n == nullptr && !p.err())
-        std::cout << "Reached end of input file" << std::endl;
+    } while(n != nullptr && !p.done());
+    
     if(p.err()) {
         printd(p.error);
         std::cout << "at:\n" << p.t.source.slice(p.t.at, 10) << std::endl;

@@ -159,3 +159,13 @@ when `continue` is called, the current state of the scope will be merged with th
 ## Um
 
 Expensive operations can be scheduled early even if the most common path doesn't use them.
+
+So there's a little quick with how I parse my code rn. When I have
+```mir
+# ...
+if(condition) {
+  return 10;
+};
+# ...
+```
+it actually parses it as `NodeIf`'s `CtrlProj` having 2 ctrl outputs... which is a little strange, as both are true control outputs. It works ok for now, since the first one will be the return, the true control output. But that's still a little strange and I should really fix it soon.

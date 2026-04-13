@@ -36,6 +36,25 @@ struct NodeStart {
     Type* arg(u32 index) { return args->val[index]; }
 };
 
+struct NodeStop {
+    // self.input = [ret1, ret2, ...]
+    Node self;
+
+    static Node* create() {
+        NodeStop node = NodeStop { 
+            .self = Node::empty(NodeType::Stop)
+        };
+        return node::peephole((Node*) Node::node_arena->push(node));
+    }
+
+    Node* ctrl(u32 index) {
+        return self.input[index];
+    }
+    u32 ctrl_size() {
+        return self.input.size;
+    }
+};
+
 struct NodeRet {
     // self.input = [ctrl, data]
     Node self;

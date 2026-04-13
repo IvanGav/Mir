@@ -9,8 +9,15 @@ namespace node {
         assert(n != nullptr);
         switch(n->nt) {
             case NodeType::Scope:
+            case NodeType::Stop:
             case NodeType::Ret:
                 return type::pool.bottom;
+
+            case NodeType::Start: {
+                NodeStart* node = (NodeStart*)(n);
+                assert(node->args != nullptr);
+                return (Type*) node->args;
+            }
             
             case NodeType::If: {
                 Type* arr[2] = {type::pool.ctrl, type::pool.ctrl};
@@ -19,7 +26,7 @@ namespace node {
             }
 
             case NodeType::Region: {
-                return type::pool.ctrl;
+                return type::pool.ctrl; // TODO
             }
             
             case NodeType::CtrlProj:
@@ -49,12 +56,6 @@ namespace node {
                     t = type::meet(t, node->data(i)->type);
                 assert(t != type::pool.top); // should refine to something more specific
                 return t;
-            }
-
-            case NodeType::Start: {
-                NodeStart* node = (NodeStart*)(n);
-                assert(node->args != nullptr);
-                return (Type*) node->args;
             }
             
             case NodeType::Const: {

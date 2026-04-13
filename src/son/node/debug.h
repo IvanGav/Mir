@@ -8,6 +8,7 @@ std::ostream& operator<<(std::ostream& os, NodeType nt) {
         case NodeType::Undefined:   return os << "Undefined";
         case NodeType::Scope:       return os << "Scope";
         case NodeType::Start:       return os << "Start";
+        case NodeType::Stop:        return os << "Stop";
         case NodeType::Ret:         return os << "Ret";
         case NodeType::Proj:        return os << "Proj";
         case NodeType::CtrlProj:    return os << "CtrlProj";
@@ -40,6 +41,10 @@ std::ostream& operator<<(std::ostream& os, Node* n) {
     switch(n->nt) {
         case NodeType::Start: {
             return os;
+        }
+
+        case NodeType::Stop: {
+            todo;
         }
 
         case NodeType::Ret: {

@@ -145,7 +145,9 @@ struct Parser {
                 Node* ret_expr = this->next_primary_expr();
                 if(ret_expr == nullptr) return nullptr;
                 if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
-                return NodeRet::create(SCOPE_NODE->ctrl(), ret_expr, token);
+                Node* node_ret = NodeRet::create(SCOPE_NODE->ctrl(), ret_expr, token);
+                STOP_NODE->push_input(node_ret); // register the return with the stop node
+                return node_ret;
             }
             
             case TokenType::VarDecl: {

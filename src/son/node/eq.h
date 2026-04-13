@@ -8,6 +8,7 @@ namespace node {
         if(left->nt != right->nt) return false; // if not same type, not same
         switch(left->nt) {
             case NodeType::Start:
+            case NodeType::Stop:
             case NodeType::Scope:
             case NodeType::Ret:
             case NodeType::If:

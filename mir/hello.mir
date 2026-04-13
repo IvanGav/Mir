@@ -1,18 +1,26 @@
-let arr: i64[10];
+let prime: i64 = 1;
 
-let i: i64 = 0;
+let counter: i64 = 1;
 
-while(i < 10) {
-    i = i + 1;
-    arr[i] = i;
+if (arg == 1) {
+    return 2;
+} else {
+    while(counter != arg) {
+        prime = prime + 2;
+        let flag: i64 = 1;
+
+        let i: i64 = 3;
+        while (i < prime) {
+            if ((prime % i) == 0) {
+                flag = 0; # should break, but i don't implement break for now
+            };
+            i = i + 2;
+        };
+
+        if(flag == 1) {
+            counter = counter + 1;
+        };
+    };
 };
 
-let sum: i64 = 0;
-i = 0;
-
-while(i < 10) {
-    i = i + 1;
-    sum = sum + arr[i];
-};
-
-return sum;
+return prime;

@@ -29,6 +29,13 @@ namespace compile {
                 break;
             }
 
+            case NodeType::Stop: {
+                Str uid = str::from_int(n->uid);
+                Slice<Str> s = Vec<Str>::with(uid, " [label=\"stop\"];\n"_s).full_slice();
+                output.push_slice(str::from_slice_of_str(s));
+                break;
+            }
+
             case NodeType::Ret: {
                 Str uid = str::from_int(n->uid);
                 Slice<Str> s = Vec<Str>::with(uid, " [label=\"return\"];\n"_s).full_slice();
@@ -138,6 +145,21 @@ namespace compile {
             }
 
             case NodeType::Start: {
+                break;
+            }
+
+            case NodeType::Stop: {
+                NodeStop* node = (NodeStop*) n;
+                Str uid = str::from_int(n->uid);
+                Vec<Str> s = Vec<Str>::with();
+                for(u32 i = 0; i < node->ctrl_size(); i++) {
+                    if(node->ctrl(i) == nullptr) { panic; }
+                    s.push(str::from_int(node->ctrl(i)->uid));
+                    s.push(" -> "_s);
+                    s.push(uid);
+                    s.push(" [style=dotted];\n"_s);
+                }
+                output.push_slice(str::from_slice_of_str(ref(s.full_slice())));
                 break;
             }
 

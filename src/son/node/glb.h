@@ -8,6 +8,7 @@ namespace node {
         assert(n != nullptr);
         switch(n->nt) {
             case NodeType::Start:
+            case NodeType::Stop:
             case NodeType::Ret:
             case NodeType::If:
             case NodeType::Region:

@@ -38,16 +38,16 @@ namespace node {
         switch(n->nt) {
             case NodeType::Scope:
             case NodeType::Start:
+            case NodeType::Stop:
             case NodeType::If:
             case NodeType::Ret:
             case NodeType::CtrlProj:
             case NodeType::Proj:
             case NodeType::Const:
-            return nullptr;
+                return nullptr;
 
             case NodeType::Region:
                 return nullptr;
-
 
             case NodeType::Phi: {
                 NodePhi* node = (NodePhi*) n;
