@@ -6,6 +6,7 @@
 namespace gcm {
     void schedule_early(NodeStart* start); // forward decl
     void schedule_late(NodeStop* start); // forward decl
+    void schedule_node_late(Node* n, Node** ns, Node** late); // forward decl
 
     // Assume no infinite loops TODO don't
     void build(NodeStart* start, NodeStop* stop) {
@@ -62,18 +63,19 @@ namespace gcm {
                 }
 
                 // All uses done, schedule
-                todo; //_doSchedLate(n,ns,late);
+                gcm::schedule_node_late(n,ns,late);
             }
 
-            // Walk all inputs and put on worklist, as their last-use might now be done
-            for( Node def : n._inputs )
-                if( def!=null && late[def._nid]==null ) {
-                    work.push(def);
-                    // if the def has a load use, maybe the load can fire
-                    for( Node ld : def._outputs )
-                        if( ld instanceof LoadNode && late[ld._nid]==null )
+            // Walk all inputs and put on worklist, as their last output might now be done
+            for(Node* input : n->input) {
+                if(input != nullptr && late[input->uid]== nullptr) {
+                    work.push(input);
+                    // if the input has a load output, maybe the load can fire
+                    for(Node* ld : input->output)
+                        if(ld->nt == NodeType::Load && late[ld->uid] == nullptr)
                             work.push(ld);
                 }
+            }
                 
             end_outer:;
         }
@@ -132,7 +134,7 @@ namespace gcm {
         // go in reverse over post order vec => reverse post order
         for(u32 i = po.size-1; i >= 0; i--) {
             Node* cfg = po[i];
-            // node::loop_depth(cfg);
+            todo; // node::loop_depth(cfg);
             for(Node* n : cfg->input)
                 gcm::schedule_node_early(n, visit);
             if(cfg->nt == NodeType::Region)
@@ -144,46 +146,21 @@ namespace gcm {
 
     // ------------------------------------------------------------------------
     void schedule_late(NodeStop* stop) {
-        CFGNode[] late = new CFGNode[Node.UID()];
-        Node[] ns = new Node[Node.UID()];
+        mem::Arena scratch = mem::Arena::create(10 MB);
+        u32 num_nodes = Node::uid_counter;
+        Node** late = scratch.alloc<Node*>(num_nodes); mem::zero(late, num_nodes);
+        Node** ns = scratch.alloc<Node*>(num_nodes); mem::zero(ns, num_nodes);
         // Breadth-first scheduling
-        breadth(stop,ns,late);
-
+        gcm::build_cfg_breadth((Node*) stop, ns, late);
         // Copy the best placement choice into the control slot
-        for( int i=0; i<late.length; i++ )
-            if( ns[i] != null && !(ns[i] instanceof ProjNode) )
-                ns[i].setDef(0,late[i]);
-    }
-
-    private static void _doSchedLate(Node n, Node[] ns, CFGNode[] late) {
-        // Walk uses, gathering the LCA (Least Common Ancestor) of uses
-        CFGNode early = n.in(0) instanceof CFGNode cfg ? cfg : n.in(0).cfg0();
-        assert early != null;
-        CFGNode lca = null;
-        for( Node use : n._outputs )
-            if( use != null )
-              lca = use_block(n,use, late)._idom(lca,null);
-
-        // Loads may need anti-dependencies, raising their LCA
-        if( n instanceof LoadNode load )
-            lca = find_anti_dep(lca,load,early,late);
-
-        // Walk up from the LCA to the early, looking for best place.  This is
-        // the lowest execution frequency, approximated by least loop depth and
-        // deepest control flow.
-        CFGNode best = lca;
-        lca = lca.idom();       // Already found best for starting LCA
-        for( ; lca != early.idom(); lca = lca.idom() )
-            if( better(lca,best) )
-                best = lca;
-        assert !(best instanceof IfNode);
-        ns  [n._nid] = n;
-        late[n._nid] = best;
+        for(u32 i = 0; i < num_nodes; i++)
+            if(ns[i] != nullptr && !(ns[i]->nt == NodeType::Proj))
+                ns[i]->set_input(0, late[i]);
     }
 
     // Block of use.  Normally from late[] schedule, except for Phis, which go
     // to the matching Region input.
-    private static CFGNode use_block(Node n, Node use, CFGNode[] late) {
+    Node* use_block(Node* n, Node* use, Node** late) {
         if( !(use instanceof PhiNode phi) )
             return late[use._nid];
         CFGNode found=null;
@@ -195,14 +172,21 @@ namespace gcm {
         return found;
     }
 
-
-    // Least loop depth first, then largest idepth
-    private static boolean better( CFGNode lca, CFGNode best ) {
-        return lca.loopDepth() < best.loopDepth() ||
-                (lca.idepth() > best.idepth() || best instanceof IfNode);
+    Node anti_dep(Node* load, Node* stblk, Node* defblk, Node* lca, Node* st) {
+        // Walk store blocks "reach" from its scheduled location to its earliest
+        for( ; stblk != defblk.idom(); stblk = stblk.idom() ) {
+            // Store and Load overlap, need anti-dependence
+            if( stblk._anti==load._nid ) {
+                lca = stblk._idom(lca,null); // Raise Loads LCA
+                if( lca == stblk && st != null && st._inputs.find(load) == -1 ) // And if something moved,
+                    st.addDef(load);   // Add anti-dep as well
+                return lca;            // Cap this stores' anti-dep to here
+            }
+        }
+        return lca;
     }
 
-    private static CFGNode find_anti_dep(CFGNode lca, LoadNode load, CFGNode early, CFGNode[] late) {
+    CFGNode find_anti_dep(CFGNode lca, LoadNode load, CFGNode early, CFGNode[] late) {
         // We could skip final-field loads here.
         // Walk LCA->early, flagging Load's block location choices
         for( CFGNode cfg=lca; early!=null && cfg!=early.idom(); cfg = cfg.idom() )
@@ -235,19 +219,36 @@ namespace gcm {
         return lca;
     }
 
-    //
-    private static CFGNode anti_dep( LoadNode load, CFGNode stblk, CFGNode defblk, CFGNode lca, Node st ) {
-        // Walk store blocks "reach" from its scheduled location to its earliest
-        for( ; stblk != defblk.idom(); stblk = stblk.idom() ) {
-            // Store and Load overlap, need anti-dependence
-            if( stblk._anti==load._nid ) {
-                lca = stblk._idom(lca,null); // Raise Loads LCA
-                if( lca == stblk && st != null && st._inputs.find(load) == -1 ) // And if something moved,
-                    st.addDef(load);   // Add anti-dep as well
-                return lca;            // Cap this stores' anti-dep to here
-            }
-        }
-        return lca;
+    void schedule_node_late(Node* n, Node** ns, Node** late) {
+        // Walk uses, gathering the LCA (Least Common Ancestor) of uses
+        Node* early = node::cfg(n->input[0]) ? n->input[0] : n->input[0]->input[0]; // originally not `n->input[0]->input[0]` but `n->input[0]->cfg0()`
+        assert(early != nullptr);
+        Node* lca = nullptr;
+        for(Node* output : n->output)
+            if(output != nullptr)
+              lca = node::idom(gcm::use_block(n, output, late), lca);
+
+        // Loads may need anti-dependencies, raising their LCA
+        if(n->nt == NodeType::Load)
+            lca = find_anti_dep(lca,load,early,late);
+
+        // Walk up from the LCA to the early, looking for best place.  This is
+        // the lowest execution frequency, approximated by least loop depth and
+        // deepest control flow.
+        CFGNode best = lca;
+        lca = lca.idom();       // Already found best for starting LCA
+        for( ; lca != early.idom(); lca = lca.idom() )
+            if( better(lca,best) )
+                best = lca;
+        assert !(best instanceof IfNode);
+        ns  [n._nid] = n;
+        late[n._nid] = best;
     }
 
+
+    // Least loop depth first, then largest idepth
+    bool better( CFGNode lca, CFGNode best ) {
+        return lca.loopDepth() < best.loopDepth() ||
+                (lca.idepth() > best.idepth() || best instanceof IfNode);
+    }
 }
