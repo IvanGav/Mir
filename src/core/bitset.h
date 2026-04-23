@@ -19,7 +19,7 @@ struct BitSet {
 
     // size = in sizeof(bits), not bits
     void reserve(usize new_size) {
-        mem::Arena* arena = (this->arena == nullptr) ? &default_arena : this->arena;
+        if(arena == nullptr) arena = &default_arena;
         data = arena->realloc(data, size, new_size);
         mem::zero(data+size, new_size-size); // zero out the new bytes
         size = new_size;
@@ -35,14 +35,14 @@ struct BitSet {
         usize i = num/(sizeof(bits)*8);
         usize offset = num%(sizeof(bits)*8);
         if(i >= size) { this->reserve(next_power_of_two(i+1)); }
-        data[i] |= (1 << offset);
+        data[i] |= (bits(1) << offset);
     }
 
     void unset(usize num) {
         usize i = num/(sizeof(bits)*8);
         usize offset = num%(sizeof(bits)*8);
-        if(i >= size) { this->reserve(next_power_of_two(i+1)); }
-        data[i] &= ~(1 << offset);
+        if(i >= size) { return; }
+        data[i] &= bits(~(bits(1) << offset));
     }
 
     void toggle(usize num) {
@@ -63,6 +63,7 @@ struct BitSet {
 
     void clear() {
         // size = 0;
+        if(data == nullptr) return;
         mem::zero(data, size);
     }
 
@@ -71,6 +72,7 @@ struct BitSet {
     // if `new_arena` is `nullptr`, use the same arena as `this`
     BitSet clone(mem::Arena* new_arena = nullptr) {
         new_arena = (new_arena == nullptr ? this->arena : new_arena);
+        if(new_arena == nullptr) new_arena = &default_arena;
         BitSet newbs {
             .data = new_arena->alloc<bits>(size),
             .size = size,
@@ -81,7 +83,7 @@ struct BitSet {
     }
 };
 
-std::ostream& operator<<(std::ostream& os, BitSet& bitset) {
+std::ostream& operator<<(std::ostream& os, BitSet const& bitset) {
     os << '[';
     for(usize i = 0; i < bitset.size * sizeof(BitSet::bits) * 8; i++) {
         os.put(bitset[i] ? '1' : '0');

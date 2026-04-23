@@ -61,4 +61,14 @@ int main(int argc, char* argv[]) {
         u64 output_value = Evaluator::create_and_run(START_NODE, program_input, 100000);
         std::cout << "Program output: " << output_value << std::endl;
     }
+
+    node::compute_idom();
+
+    // for(u32 i = 0; i < node::cfg_size; i++) {
+    //     std::cout << 
+    //         node::cfgrp[i]->nt << " is dominated by " << 
+    //         node::dom[node::cfgrp[i]->cfgid]->nt << " and has idepth = " <<
+    //         node::domdepth[node::cfgrp[i]->cfgid] << " and loop depth = " <<
+    //         node::loopdepth[node::cfgrp[i]->cfgid] << std::endl;
+    // }
 }

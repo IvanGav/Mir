@@ -33,6 +33,7 @@ namespace mem {
 
     template <typename T>
     void zero(T* ptr, usize size) {
+        assert(ptr != nullptr);
         ::memset((void*) ptr, 0, sizeof(T) * size);
     }
 

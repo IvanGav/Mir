@@ -32,6 +32,7 @@ namespace node {
                 assert(i == 0);
                 return node->ctrl();
             }
+            case NodeType::Loop:
             case NodeType::Region: {
                 NodeRegion* node = (NodeRegion*) n;
                 assert(i <= node->ctrl_size());
@@ -61,6 +62,7 @@ namespace node {
                 NodeStop* node = (NodeStop*) n;
                 return node->ctrl_size();
             }
+            case NodeType::Loop:
             case NodeType::Region: {
                 NodeRegion* node = (NodeRegion*) n;
                 return node->ctrl_size();

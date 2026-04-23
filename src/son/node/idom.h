@@ -2,6 +2,7 @@
 
 #include "node.h"
 #include "cfg.h"
+#include "debug.h"
 
 // Imlementation of the dominance algorithm
 //  from:   "A Simple, Fast Dominance Algorithm" 
@@ -19,9 +20,13 @@ namespace node {
     // Vec<u32> loopdepth; // loop depth of all cfg nodes
 
     // fill the `cfgrp` with the postordering of the cfg graph
-    void cfg_postorder(CFGNode* n) {
-        for(u32 i = 0; i < n->ctrl_size(); i++) {
-            node::cfg_postorder(n->ctrl(i));
+    void cfg_postorder(CFGNode* n, BitSet& visited) {
+        if(visited[n->uid]) return;
+        visited.set(n->uid);
+        for(u32 i = 0; i < n->output.size; i++) {
+            if(n->output[i]->cfg()) {
+                node::cfg_postorder(n->output[i], visited);
+            }
         }
         cfgrp.push(n);
     }
@@ -35,7 +40,8 @@ namespace node {
         loopdepth = Vec<u32>::create(default_arena);
         CFGNode* start = START_NODE;
         // get reverse postordering of the cfg graph
-        node::cfg_postorder(start);
+        BitSet visited{};
+        node::cfg_postorder(start, visited);
         cfgrp.reverse();
         cfg_size = cfgrp.size;
         // give all nodes their `cfgid`
@@ -44,6 +50,8 @@ namespace node {
         }
         // populate the `dom` and `domdepth` array
         dom.resize(cfg_size); domdepth.resize(cfg_size);
+        assert(cfgrp[0] == START_NODE);
+        dom[0] = START_NODE; // define the Start's idom is itself
         // also assume that all other nodes have inputs; aka NodeStop has at least 1 return connected = no true infinite loops
         // start at 1, because 0 is NodeStart (the only node with no idom)
         // 1 loop over should be enough, since my graphs should be reducible (no goto's, basically)
@@ -55,12 +63,13 @@ namespace node {
                 CFGNode* common_idom = n->ctrl(0);
                 u32 max_depth = domdepth[n->ctrl(0)->cfgid];
                 for(u32 i = 1; i < n->ctrl_size(); i++) {
+                    if(dom[n->ctrl(i)->cfgid] == nullptr) continue;
                     common_idom = node::idom(common_idom, n->ctrl(i));
                     max_depth = max(max_depth, domdepth[n->ctrl(i)->cfgid]);
                 }
                 if(dom[n->cfgid] != common_idom) {
                     dom[n->cfgid] = common_idom;
-                    domdepth[n->cfgid] = max_depth;
+                    domdepth[n->cfgid] = max_depth+1;
                     changed = true;
                 }
             }
@@ -68,7 +77,8 @@ namespace node {
         }
         if(loop_count != 2) {
             std::cout << "--WARNING: create_idom took more than 2 loops" << std::endl;
-            printd(loop_count);
+            std::cout << loop_count << std::endl;
+            // printd(loop_count);
         }
         // find the loop depth of each cfg node
         loopdepth.resize(cfg_size);
@@ -84,7 +94,7 @@ namespace node {
     CFGNode* idom(CFGNode* n1, CFGNode* n2) {
         // the algorithm is to go up the idom tree until we meet 
         assert(node::cfg(n1)); assert(node::cfg(n2));
-        while(n1 != n2) { // TODO make sure that these comparisons are right and not reversed (which the paper seems to suggest)
+        while(n1 != n2) {
             while(n1->cfgid > n2->cfgid) n1 = n1->idom();
             while(n1->cfgid < n2->cfgid) n2 = n2->idom();
         }
