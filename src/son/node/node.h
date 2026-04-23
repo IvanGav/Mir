@@ -2,6 +2,7 @@
 
 #include "../prelude.h"
 
+#include "static.h"
 #include "node_def.h"
 #include "scope.h"
 
@@ -9,14 +10,7 @@ namespace node {
     Node* peephole(Node*);
 };
 
-/* Specialized Nodes */
-
-// All nodes will have several static "constructors" and a `create` method that will take an object and put it into the node arena.
-// It's not ideal, I suppose, but it'll probably look nice. First, create an object. Then put it onto arena and add inputs.
-// `self.input` should not really be accessed. Only from `Node*`, when it doesn't really care about *what* the input is.
-// 2 most standard "constructors" are: 
-// - generated (no token provided, this node is related to an optimization or not attached to any specific source code symbol)
-// - from_token (token provided, this node is created directly from some source code symbol)
+/* cfg nodes */
 
 struct NodeStart {
     // self.input = []
@@ -26,14 +20,14 @@ struct NodeStart {
     // Consturctors
     static Node* create(Slice<Type*> args) {
         NodeStart node = NodeStart { 
-            .self = Node::empty(NodeType::Start),
+            .self = Node::create(NodeType::Start),
             .args = (TypeTuple*) type::pool.from_slice(args)
         };
         return node::peephole((Node*) Node::node_arena->push(node));
     }
 
     // Getters
-    Type* arg(u32 index) { return args->val[index]; }
+    Type* arg(u32 index) const { return args->val[index]; }
 };
 
 struct NodeStop {
@@ -42,15 +36,15 @@ struct NodeStop {
 
     static Node* create() {
         NodeStop node = NodeStop { 
-            .self = Node::empty(NodeType::Stop)
+            .self = Node::create(NodeType::Stop)
         };
         return node::peephole((Node*) Node::node_arena->push(node));
     }
 
-    Node* ctrl(u32 index) {
+    CFGNode* ctrl(u32 index) {
         return self.input[index];
     }
-    u32 ctrl_size() {
+    u32 ctrl_size() const {
         return self.input.size;
     }
 };
@@ -60,95 +54,87 @@ struct NodeRet {
     Node self;
 
     // Constructors
-    static Node* create(Node* ctrl, Node* data, Token t = Token::empty) {
-        NodeRet node = { .self = Node::create(NodeType::Ret, t) };
+    static Node* create(CFGNode* ctrl, Node* data) {
+        NodeRet node = { .self = Node::create(NodeType::Ret) };
         Node* ptr = (Node*) Node::node_arena->push(node);
         ptr->push_inputs(ctrl, data);
         return node::peephole(ptr);
     }
     // Getters
-    Node* ctrl() { return self.input[0]; }
+    CFGNode* ctrl() { return self.input[0]; }
     Node* expr() { return self.input[1]; }
 };
 
-struct NodeConst {
-    // self.input = [ctrl]
+
+// Control split
+struct NodeIf {
+    // self.input = [ctrl, condition]
     Node self;
-    Type* val;
 
     // Constructors
-    static Node* create(Type* value, Node* ctrl, Token t = Token::empty) {
-        NodeConst node = { 
-            .self = Node::create(NodeType::Const, t),
-            .val = value
+    static Node* create(Node* ctrl, Node* condition) {
+        assert(ctrl != nullptr);
+        NodeIf node = { 
+            .self = Node::create(NodeType::If)
         };
         Node* ptr = (Node*) Node::node_arena->push(node);
-        ptr->push_inputs(ctrl);
+        ptr->push_inputs(ctrl, condition);
         return node::peephole(ptr);
-    }
-    static Node* create(i64 value, Node* ctrl, Token t = Token::empty) {
-        return NodeConst::create(type::pool.int_const(value), ctrl, t);
     }
 
     // Getters
-    Node* ctrl() { return self.input[0]; }
+    CFGNode* ctrl() { return self.input[0]; }
+    Node* condition() { return self.input[1]; }
 };
 
-struct NodeBinOp {
-    // self.input = [lhs, rhs]
+// Control merge
+// Can be NodeType::Region OR NodeType::Loop
+struct NodeRegion {
+    // self.input = [ctrl1, ctrl2, ...]
     Node self;
-    Op op;
 
     // Constructors
-    static Node* create(Op op, Node* lhs, Node* rhs, Token t = Token::empty) {
-        assert(op::binary(op));
-        NodeBinOp node = { 
-            .self = Node::create(node::type_of_op(op), t),
-            .op = op
+    // creates a region (not loop) node
+    static Node* create(Node* ctrl1, Node* ctrl2) {
+        assert(ctrl1 != nullptr);
+        assert(ctrl2 != nullptr);
+        NodeRegion node = { 
+            .self = Node::create(NodeType::Region)
         };
         Node* ptr = (Node*) Node::node_arena->push(node);
-        ptr->push_inputs(lhs, rhs);
+        ptr->push_inputs(ctrl1, ctrl2);
         return node::peephole(ptr);
     }
-    static Node* from_token(Node* lhs, Node* rhs, Token t) {
-        return NodeBinOp::create(op::binary(t.val), lhs, rhs, t);
+    // creates a loop node
+    static Node* create_incomplete(Node* ctrl1) {
+        assert(ctrl1 != nullptr);
+        NodeRegion node = { 
+            .self = Node::create(NodeType::Loop)
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl1, nullptr);
+        return node::peephole(ptr);
     }
 
     // Getters
-    Node* lhs() { return self.input[0]; }
-    Node* rhs() { return self.input[1]; }
+    CFGNode* ctrl(u32 index) { return self.input[index]; }
+    u32 ctrl_size() { return self.input.size; }
+    // void set_ctrl(u32 index, Node* new_ctrl) { self.set_input(index, new_ctrl); }
 
-    void swap_lhs_rhs() {
-        // this shouldn't really be done, but oh well
-        Node* temp = this->lhs();
-        self.input[0] = self.input[1];
-        self.input[1] = temp;
+    // If this region node was incomplete (aka loop in parsing), complete it by providing it the back-edge (true proj)
+    void complete(Node* new_ctrl) {
+        assert(this->ctrl(this->ctrl_size()-1) == nullptr);
+        self.set_input(this->ctrl_size()-1, new_ctrl);
+    }
+    
+    // Other helpers
+    // return true if not yet constructed fully
+    bool is_incomplete() {
+        return this->ctrl(this->ctrl_size()-1) == nullptr;
     }
 };
 
-struct NodeUnOp {
-    // self.input = [rhs]
-    Node self;
-    Op op;
-
-    // Constructors
-    static Node* create(Op op, Node* rhs, Token t = Token::empty) {
-        assert(op::unary(op));
-        NodeUnOp node = { 
-            .self = Node::create(node::type_of_op(op), t),
-            .op = op
-        };
-        Node* ptr = (Node*) Node::node_arena->push(node);
-        ptr->push_inputs(rhs);
-        return node::peephole(ptr);
-    }
-    static Node* from_token(Node* rhs, Token t) {
-        return NodeUnOp::create(op::unary(t.val), rhs, t);
-    }
-
-    // Getters
-    Node* rhs() { return self.input[0]; }
-};
+/* either cfg or data */
 
 // self.nt == Proj OR CtrlProj
 // Note that "ctrl" may not be a literal cfg node, in the future. It is for now, but if I project the struct field values...
@@ -170,81 +156,105 @@ struct NodeProj {
         ptr->push_inputs(ctrl);
         return node::peephole(ptr);
     }
+    // projection of a Type::Ctrl
+    static CFGNode* cfg_proj(u32 tuple_index, CFGNode* ctrl) {
+        return NodeProj::create(tuple_index, ctrl, true);
+    }
+    // projection of some data type
+    static Node* data_proj(u32 tuple_index, Node* ctrl) {
+        return NodeProj::create(tuple_index, ctrl, false);
+    }
 
     // Getters
-    Node* ctrl() { return self.input[0]; }
+    CFGNode* ctrl() {
+        assert(self.input[0]->cfg()); // at some point may be false; catch if ever happens
+        return self.input[0];
+    }
 };
 
-// Control split
-struct NodeIf {
-    // self.input = [ctrl, condition]
+/* data nodes */
+
+struct NodeConst {
+    // self.input = [ctrl]
     Node self;
+    Type* val;
 
     // Constructors
-    static Node* create(Node* ctrl, Node* condition, Token t = Token::empty) {
-        assert(ctrl != nullptr);
-        NodeIf node = { 
-            .self = Node::create(NodeType::If, t)
+    static Node* create(Type* value) {
+        NodeConst node = { 
+            .self = Node::create(NodeType::Const),
+            .val = value
         };
         Node* ptr = (Node*) Node::node_arena->push(node);
-        ptr->push_inputs(ctrl, condition);
+        ptr->push_inputs(START_NODE);
         return node::peephole(ptr);
     }
+    static Node* create(i64 value) { return NodeConst::create(type::pool.int_const(value)); }
 
     // Getters
-    Node* ctrl() { return self.input[0]; }
-    Node* condition() { return self.input[1]; }
+    CFGNode* ctrl() { return self.input[0]; }
 };
 
-// Control merge
-struct NodeRegion {
-    // self.input = [ctrl1, ctrl2, ...]
+struct NodeBinOp {
+    // self.input = [ctrl, lhs, rhs]
     Node self;
-    bool loop;
+    Op op;
 
     // Constructors
-    static Node* create(Node* ctrl1, Node* ctrl2) {
-        assert(ctrl1 != nullptr);
-        assert(ctrl2 != nullptr);
-        NodeRegion node = { 
-            .self = Node::create(NodeType::Region),
-            .loop = false
+    static Node* create(Op op, Node* lhs, Node* rhs) {
+        assert(op::binary(op));
+        NodeBinOp node = { 
+            .self = Node::create(NodeType::BinOp),
+            .op = op
         };
         Node* ptr = (Node*) Node::node_arena->push(node);
-        ptr->push_inputs(ctrl1, ctrl2);
+        ptr->push_inputs(nullptr, lhs, rhs);
         return node::peephole(ptr);
     }
-    static Node* create_incomplete(Node* ctrl1) {
-        assert(ctrl1 != nullptr);
-        NodeRegion node = { 
-            .self = Node::create(NodeType::Region),
-            .loop = true
-        };
-        Node* ptr = (Node*) Node::node_arena->push(node);
-        ptr->push_inputs(ctrl1, nullptr);
-        return node::peephole(ptr);
+    static Node* from_token(Node* lhs, Node* rhs, Token t) {
+        return NodeBinOp::create(op::binary(t.val), lhs, rhs);
     }
 
     // Getters
-    Node* ctrl(u32 index) { return self.input[index]; }
-    u32 ctrl_size() { return self.input.size; }
-    // void set_ctrl(u32 index, Node* new_ctrl) { self.set_input(index, new_ctrl); }
+    CFGNode* ctrl() { return self.input[0]; }
+    Node* lhs() { return self.input[1]; }
+    Node* rhs() { return self.input[2]; }
 
-    // If this region node was incomplete (aka loop in parsing), complete it by providing it the back-edge (true proj)
-    void complete(Node* new_ctrl) {
-        assert(this->ctrl(this->ctrl_size()-1) == nullptr);
-        self.set_input(this->ctrl_size()-1, new_ctrl);
+    // Methods
+    void swap_lhs_rhs() {
+        Node* temp = self.input[1];
+        self.input[1] = self.input[2];
+        self.input[2] = temp;
     }
-    
-    // Other helpers
-    // return true if not yet constructed fully
-    bool is_incomplete() {
-        return this->ctrl(this->ctrl_size()-1) == nullptr;
+};
+
+struct NodeUnOp {
+    // self.input = [ctrl, rhs]
+    Node self;
+    Op op;
+
+    // Constructors
+    static Node* create(Op op, Node* rhs) {
+        assert(op::unary(op));
+        NodeUnOp node = { 
+            .self = Node::create(NodeType::UnOp),
+            .op = op
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(nullptr, rhs);
+        return node::peephole(ptr);
     }
+    static Node* from_token(Node* rhs, Token t) {
+        return NodeUnOp::create(op::unary(t.val), rhs);
+    }
+
+    // Getters
+    CFGNode* ctrl() { return self.input[0]; }
+    Node* rhs() { return self.input[1]; }
 };
 
 struct NodePhi {
-    // self.input = [region, input1, input2, ...]
+    // self.input = [region(ctrl), input1, input2, ...]
     Node self;
     Str debug_var_name;
 
@@ -286,6 +296,7 @@ struct NodePhi {
 
     // Getters
     Node* region() { return self.input[0]; }
+    Node* ctrl() { return this->region(); }
     // 0-indexed
     Node* data(u32 index) { return self.input[index+1]; }
     u32 data_size() { return self.input.size-1; }
@@ -294,8 +305,8 @@ struct NodePhi {
     }
     // complete with the given data node
     void complete(Node* data2) {
-        assert(this->self.input[2] == nullptr);
-        this->self.set_input(2, data2);
+        assert(this->self.input[this->data_size()] == nullptr);
+        this->self.set_input(this->data_size(), data2);
     }
     // return true if not yet constructed fully
     bool is_incomplete() {
@@ -305,6 +316,7 @@ struct NodePhi {
     bool all_same() {
         NodeType nt = this->data(0)->nt;
         for(u32 i = 1; i < this->data_size(); i++) {
+            assert(this->data(i) != nullptr); // shouldn't call on incomplete nodes
             if(this->data(i)->nt != nt) return false;
         }
         return true;
@@ -325,72 +337,69 @@ struct NodePhi {
 };
 
 struct NodeLoad {
-    // self.input = [mem (mem), base (ptr), offset (i64)]
+    // self.input = [ctrl, mem (mem), base (ptr), offset (i64)]
     Node self;
     u32 mem_alias;
     Type* decl_type;
 
     static Node* create(u32 alias, Node* mem, Node* ptr, Node* offset) {
-        // assert(mem->type->ttype == TypeT::Mem);
-        // assert(ptr->type->ttype == TypeT::Ptr);
         NodeLoad node = {
             .self = Node::create(NodeType::Load),
             .mem_alias = alias,
             .decl_type = type::pool.int_sized(4) // TODO hardcoded
         };
         Node* nptr = (Node*) Node::node_arena->push(node);
-        nptr->push_inputs(mem, ptr, offset);
+        nptr->push_inputs(nullptr, mem, ptr, offset);
         return node::peephole(nptr);
     }
 
-    Node* mem() { return self.input[0]; }
-    Node* ptr() { return self.input[1]; }
-    Node* off() { return self.input[2]; }
+    CFGNode* ctrl() { return self.input[0]; }
+    Node* mem() { return self.input[1]; }
+    Node* ptr() { return self.input[2]; }
+    Node* off() { return self.input[3]; }
 };
 
 struct NodeStore {
-    // self.input = [mem (mem), base (ptr), offset (i64), val]
+    // self.input = [ctrl, mem (mem), base (ptr), offset (i64), val]
     Node self;
     u32 mem_alias;
     Type* decl_type;
 
     static Node* create(u32 alias, Node* mem, Node* ptr, Node* offset, Node* val) {
-        // assert(mem->type->ttype == TypeT::Mem);
-        // assert(ptr->type->ttype == TypeT::Ptr);
         NodeStore node = {
             .self = Node::create(NodeType::Store),
             .mem_alias = alias,
             .decl_type = type::pool.int_sized(4) // TODO hardcoded
         };
         Node* nptr = (Node*) Node::node_arena->push(node);
-        nptr->push_inputs(mem, ptr, offset, val);
+        nptr->push_inputs(nullptr, mem, ptr, offset, val);
         return node::peephole(nptr);
     }
 
-    Node* mem() { return self.input[0]; }
-    Node* ptr() { return self.input[1]; }
-    Node* off() { return self.input[2]; }
-    Node* val() { return self.input[3]; }
+    CFGNode* ctrl() { return self.input[0]; }
+    Node* mem() { return self.input[1]; }
+    Node* ptr() { return self.input[2]; }
+    Node* off() { return self.input[3]; }
+    Node* val() { return self.input[4]; }
 };
 
 struct NodeAllocA {
     // self.input = [ctrl, alloc_size, init_mem]
     Node self;
-    // ptr->ttype == TypeT::Ptr
-    Type* ptr;
+    TypePtr* ptr;
 
     static Node* create(Type* decl_type, Node* ctrl, Node* alloc_size, Node* init_mem) {
         assert(decl_type->ttype == TypeT::Ptr);
         NodeAllocA node = {
             .self = Node::create(NodeType::AllocA),
-            .ptr = decl_type
+            .ptr = (TypePtr*) decl_type
         };
         Node* ptr = (Node*) Node::node_arena->push(node);
         ptr->push_inputs(ctrl, alloc_size, init_mem);
         return node::peephole(ptr);
     }
 
-    Node* ctrl() { return self.input[0]; }
+    CFGNode* ctrl() { return self.input[0]; }
     Node* size() { return self.input[1]; }
     Node* mem() { return self.input[2]; }
 };
@@ -419,7 +428,7 @@ struct NodeScope {
     }
 
     // Getters
-    Node* ctrl() { assert(self.input.size > 0); return self.input[0]; }
+    CFGNode* ctrl() { assert(self.input.size > 0); return self.input[0]; }
     bool is_xctrl() { return self.type == type::pool.xctrl; }
 
     // Methods
@@ -497,7 +506,6 @@ struct NodeScope {
     Node* define(Str var_name, Node* new_value) {
         if(this->is_xctrl()) { return VOID_NODE; }
         // no need to `resolve_sentinel` since can only define or redefine in the top scope = cannot encounter a sentinel
-        // assert(var_name != CTRL_STR);
         scope.define(var_name, self.input.size);
         self.push_input(new_value);
         return new_value;
@@ -538,7 +546,7 @@ struct NodeScope {
         assert(!self.is_dead() && !this->is_xctrl()); // head must be alive
         assert(back != this && back != exit && exit != this);
         NodeRegion* cur_ctrl = (NodeRegion*)this->ctrl(); // technically unsafe
-        assert(cur_ctrl->self.nt == NodeType::Region && cur_ctrl->is_incomplete());
+        assert(cur_ctrl->self.nt == NodeType::Loop && cur_ctrl->is_incomplete());
         cur_ctrl->complete(back->ctrl());
         for(u32 i = 1; i < self.input.size; i++) {
             if(back->self.input[i] != (Node*)this) {

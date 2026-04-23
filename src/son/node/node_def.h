@@ -11,78 +11,53 @@
 #include "../../token/tokenizer.h"
 
 #include "static.h"
-// #include "gvn.h"
 
 struct Node;
+typedef Node CFGNode; // semantically must be a cfg node
 namespace node {
     u64 hash(Node*);
+    bool cfg(Node* n);
+    Type* compute(Node* n);
+    bool eq(Node* left, Node* right);
+    bool glb(Node* n);
+    Node* idealize(Node* n);
+    Node* peephole(Node* n);
+    bool pinned(Node* n);
+    CFGNode* get_ctrl(Node* n);
+    CFGNode* get_cfg_ctrl(CFGNode* n, u32 i);
+    u32 ctrl_size(CFGNode* n);
 };
 
 enum class NodeType {
-    Undefined,
+    Undefined = 0,
     Scope,
-    Proj,
 
     // Control
     Start, Stop, Ret,
-    If, Region,
+    If, // Never, // both are NodeIf; semantically Never will always be false (used for handling infinite loops)
+    Region, Loop, // both are NodeRegion; semantically different though
     CtrlProj,
 
     // Data
     Const,
-    Add, Sub, Mul, Div, Mod, Neg,
-    Eq, Neq, Less, Greater, LessEq, GreaterEq,
-    Phi,
+    BinOp,
+    UnOp,
+    Phi, Proj,
     Load, Store, AllocA
 };
 
-namespace node {
-    NodeType type_of_op(Op op) {
-        switch (op) {
-            case Op::Neg:           return NodeType::Neg;
-            case Op::LogiNot:       todo;
-            case Op::BitNot:        todo;
-
-            case Op::Add:           return NodeType::Add;
-            case Op::Sub:           return NodeType::Sub;
-            case Op::Mul:           return NodeType::Mul;
-            case Op::Div:           return NodeType::Div;
-            case Op::Mod:           return NodeType::Mod;
-            case Op::LogiOr:        todo;
-            case Op::LogiAnd:       todo;
-            case Op::BitOr:         todo;
-            case Op::BitAnd:        todo;
-            case Op::BitXor:        todo;
-            case Op::Eq:            return NodeType::Eq;
-            case Op::Neq:           return NodeType::Neq;
-            case Op::Less:          return NodeType::Less;
-            case Op::Greater:       return NodeType::Greater;
-            case Op::LessEq:        return NodeType::LessEq;
-            case Op::GreaterEq:     return NodeType::GreaterEq;
-            case Op::Assignment:    todo;
-
-            case Op::Undefined:
-            case Op::Minus:
-            case Op::Star:
-            case Op::Ampersand:     panic;
-        }
-        unreachable;
-    }
-}
-
-// Assume that *every* node is reachable from Start by *only* using `output` edges
+// Assume that *every* node is reachable from Start by *only* using `output` edges and from Stop by *only* using `input` edges
 struct Node {
     u32 uid;
     NodeType nt;
-    Maybe<Token> token;
-    Vec<Node*> input; // use-def references; nullable, fixed length, ordered
-    Vec<Node*> output; // def-use references; can have null values only from calling `keep` and `unkeep` 
+    Vec<Node*> input; // use-def references; nullable, fixed length, ordered; for data nodes, `input[0]` is always ctrl
+    Vec<Node*> output; // def-use references
+    Vec<Node*> deps; // dependents; when optimizing this node, the dependents should also be optimized (during the iterative peeps)
     Type* type; // best known type of this node; if null, this node is dead (nonull for alive nodes)
-    u64 hash; // cached hash; for general speedup on gvn lookup
-    bool locked; // cannot modify inputs or type because of GVN
+    bool keepalive;
+    bool locked;
 
-    u32 loop_depth;
-    u32 dom_depth;
+    u32 cfgid; // assigned and used during `compute_idom` step; only defined for cfg nodes; index into the `dom` and other vectors
 
     inline static u32 uid_counter = 0;
     inline static mem::Arena* node_arena = nullptr;
@@ -95,23 +70,16 @@ struct Node {
         // Node::gvn = GVN::create(arena);
     }
 
-    // No token
-    static Node empty(NodeType type) {
+    static Node create(NodeType type) {
         Node::uid_counter++;
-        return Node { .uid=Node::uid_counter, .nt=type, .token=Maybe<Token>::none(),
-            .input=Vec<Node*>::create(*Node::node_arena), .output=Vec<Node*>::create(*Node::node_arena),
-            .type=type::pool.top, .hash=0, .locked=false
+        return Node {
+            .uid=Node::uid_counter, .nt=type,
+            .input=Vec<Node*>::create(*Node::node_arena),
+            .output=Vec<Node*>::create(*Node::node_arena),
+            .deps=Vec<Node*>::create(*Node::node_arena),
+            .type=type::pool.top,
+            .keepalive=false, .locked=false
         };
-    }
-    // Yes token
-    static Node from_token(NodeType type, Token t) {
-        Node n = Node::empty(type);
-        n.token = Maybe<Token>::some(t);
-        return n;
-    }
-    // Maybe token
-    static Node create(NodeType type, Token t = Token::empty) {
-        return t == Token::empty ? Node::empty(type) : Node::from_token(type, t);
     }
 
     /* Methods */
@@ -138,16 +106,6 @@ struct Node {
     void pop_inputs(usize n) {
         for(usize i = 0; i < n; i++) this->pop_input();
     }
-    void remove_input(Node* value) {
-        bool removed = input.remove_first_of(value);
-        assert(removed);
-        if(value != nullptr) {
-            value->output.remove_first_of(this); // remove this from popped node's output
-            // If we removed the last use, the old input is now dead
-            if(value->is_unused())
-                value->kill();
-        }
-    }
     // set given index in `this->input` to `new_input` and return `new_input`
     // kill the previous node if it becomes unused
     Node* set_input(usize index, Node* new_input) {
@@ -168,7 +126,7 @@ struct Node {
         return new_input;
     }
     bool is_unused() {
-        return output.empty();
+        return output.empty() && !keepalive;
     }
     bool is_dead() {
         return this->is_unused() && input.empty() && type == nullptr;
@@ -176,7 +134,6 @@ struct Node {
     void kill() {
         assert(this->is_unused()); // Has no uses, so it is dead
         this->pop_inputs(input.size); // Set all inputs to null, recursively killing unused Nodes
-        // for(usize i = 0; i < input.size; i++) { this->set_input(i, nullptr); } input.clear();
         type = nullptr; // Flag as dead
         assert(this->is_dead());
     }
@@ -194,10 +151,8 @@ struct Node {
     }
     
     // helpters to stop DCE mid-parse
-    // Add bogus null use to keep node alive
-    void keep() { output.push(nullptr); }
-    // Remove bogus null.
-    void unkeep() { output.remove_first_of(nullptr); }
+    void keep() { keepalive = true; }
+    void unkeep() { keepalive = false; }
 
     // void unlock() {
     //     if(!locked) return;
@@ -212,18 +167,52 @@ struct Node {
     //     locked = true;
     // }
 
-    // helpers
+    /* idom related functions */
 
-    bool is_binop() {
-        switch(nt) {
-            case NodeType::Add:
-            case NodeType::Sub:
-            case NodeType::Mul:
-            case NodeType::Div:
-            case NodeType::Mod:
-                return true;
-            default:
-                return false;
+    // get immidiate dominator of `n`
+    // return nullptr if called on `NodeStart` or `NodeStop` without any returns
+    CFGNode* idom() {
+        assert(node::cfg_size > 0); // `compute_idom` has been called
+        if(this->cfg()) return node::dom[cfgid];
+        else            panic; //return this->ctrl(); // a data node's idom is its ctrl
+    }
+    // get the depth in the dominator tree
+    u32 idepth() {
+        assert(node::cfg_size > 0); // `compute_idom` has been called
+        if(this->cfg()) return node::domdepth[cfgid];
+        else            panic; //return this->ctrl()->idepth();
+    }
+    // get the loop depth
+    u32 loop_depth() {
+        assert(node::cfg_size > 0); // `compute_idom` has been called
+        if(this->cfg()) return node::loopdepth[cfgid];
+        else            panic; //return this->ctrl()->loop_depth();
+    }
+
+    /* Less generic functions that operate on generic Node*; just helpers to call those */
+
+    bool cfg() { return node::cfg(this); }
+    Type* compute() { return node::compute(this); }
+    bool eq(Node* other) { return node::eq(this, other); }
+    bool glb() { return node::glb(this); }
+    Node* idealize() { return node::idealize(this); }
+    Node* peephole() { return node::peephole(this); }
+    bool pinned() { return node::pinned(this); }
+
+    /* including ctrl getters and setters */
+    
+    // get (this) data node's ctrl OR get (this) cfg node's only ctrl (if it has singular)
+    CFGNode* ctrl() {
+        if(this->cfg()) {
+            assert(this->ctrl_size() == 1);
+            return node::get_cfg_ctrl(this, 0);
+        } else {
+            return node::get_ctrl(this);
         }
     }
+    // get (this) cfg node's ith ctrl
+    CFGNode* ctrl(u32 i) { return node::get_cfg_ctrl(this, i); }
+    // get (this) cfg node's number of (ctrl) inputs
+    u32 ctrl_size() { return node::ctrl_size(this); }
+    
 };

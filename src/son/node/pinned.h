@@ -12,6 +12,7 @@ namespace node {
             case NodeType::Ret:
             case NodeType::If:
             case NodeType::Region:
+            case NodeType::Loop:
             case NodeType::CtrlProj:
                 return true;
             
@@ -25,18 +26,8 @@ namespace node {
 
             // can move freely
             case NodeType::Const:
-            case NodeType::Add:
-            case NodeType::Sub:
-            case NodeType::Mul:
-            case NodeType::Div:
-            case NodeType::Mod:
-            case NodeType::Eq:
-            case NodeType::Neq:
-            case NodeType::Less:
-            case NodeType::Greater:
-            case NodeType::LessEq:
-            case NodeType::GreaterEq:
-            case NodeType::Neg:
+            case NodeType::BinOp:
+            case NodeType::UnOp:
                 return false;
             
             case NodeType::Scope:

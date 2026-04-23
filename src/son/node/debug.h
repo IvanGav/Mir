@@ -14,20 +14,11 @@ std::ostream& operator<<(std::ostream& os, NodeType nt) {
         case NodeType::CtrlProj:    return os << "CtrlProj";
         case NodeType::If:          return os << "If";
         case NodeType::Region:      return os << "Region";
+        case NodeType::Loop:        return os << "Loop";
         case NodeType::Phi:         return os << "Phi";
         case NodeType::Const:       return os << "Const";
-        case NodeType::Add:         return os << "Add";
-        case NodeType::Sub:         return os << "Sub";
-        case NodeType::Mul:         return os << "Mul";
-        case NodeType::Div:         return os << "Div";
-        case NodeType::Mod:         return os << "Mod";
-        case NodeType::Eq:          return os << "Eq";
-        case NodeType::Neq:         return os << "Neq";
-        case NodeType::Less:        return os << "Less";
-        case NodeType::Greater:     return os << "Greater";
-        case NodeType::LessEq:      return os << "LessEq";
-        case NodeType::GreaterEq:   return os << "GreaterEq";
-        case NodeType::Neg:         return os << "Neg";
+        case NodeType::BinOp:       todo;
+        case NodeType::UnOp:        todo;
         case NodeType::Load:        return os << "Load";
         case NodeType::Store:       return os << "Store";
         case NodeType::AllocA:      return os << "AllocA";
@@ -37,7 +28,7 @@ std::ostream& operator<<(std::ostream& os, NodeType nt) {
 
 std::ostream& operator<<(std::ostream& os, Node* n) {
     assert(n != nullptr);
-    os << n->uid << ": " << n->nt << "(" << n->token << ")\n";
+    os << n->uid << ": " << n->nt << "\n";
     switch(n->nt) {
         case NodeType::Start: {
             return os;
@@ -61,6 +52,7 @@ std::ostream& operator<<(std::ostream& os, Node* n) {
             return os;
         }
 
+        case NodeType::Loop:
         case NodeType::Region: {
             NodeRegion* node = (NodeRegion*) n;
             for(u32 i = 0; i < node->self.input.size; i++) {
@@ -103,24 +95,14 @@ std::ostream& operator<<(std::ostream& os, Node* n) {
             return os;
         }
 
-        case NodeType::Add:
-        case NodeType::Sub:
-        case NodeType::Mul:
-        case NodeType::Div:
-        case NodeType::Mod:
-        case NodeType::Eq:
-        case NodeType::Neq:
-        case NodeType::Less:
-        case NodeType::Greater:
-        case NodeType::LessEq:
-        case NodeType::GreaterEq: {
+        case NodeType::BinOp: {
             NodeBinOp* node = (NodeBinOp*) n;
             os << "\tlhs = " << node->lhs()->uid << "\n";
             os << "\trhs = " << node->rhs()->uid << "\n";
             return os;
         }
         
-        case NodeType::Neg: {
+        case NodeType::UnOp: {
             NodeUnOp* node = (NodeUnOp*) n;
             os << "\trhs = " << node->rhs()->uid << "\n";
             return os;

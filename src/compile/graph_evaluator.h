@@ -50,21 +50,11 @@ struct Evaluator {
                 TypeInt* int_type = (TypeInt*) c_type;
                 return int_type->val();
             }
-            case NodeType::Add:
-            case NodeType::Sub:
-            case NodeType::Mul:
-            case NodeType::Div:
-            case NodeType::Mod:
-            case NodeType::Eq:
-            case NodeType::Neq:
-            case NodeType::Less:
-            case NodeType::Greater:
-            case NodeType::LessEq:
-            case NodeType::GreaterEq: {
+            case NodeType::BinOp: {
                 NodeBinOp* binop_node = (NodeBinOp*) node;
                 return op::apply(binop_node->op, Evaluator::get_value(binop_node->lhs()), Evaluator::get_value(binop_node->rhs()));
             }
-            case NodeType::Neg: {
+            case NodeType::UnOp: {
                 NodeUnOp* unop_node = (NodeUnOp*) node;
                 return op::apply(unop_node->op, Evaluator::get_value(unop_node->rhs()));
             }
@@ -86,10 +76,9 @@ struct Evaluator {
                 while(loop_phi_cache.size <= i) { loop_phi_cache.push(0); }
                 loop_phi_cache[i] = value;
                 i++;
-                // loop_phi_cache.push(value); // TODO in the original, it uses lpc[i] = value; i++; why?
             }
         }
-        i = 0; // TODO why not in a single loop?
+        i = 0;
         for(Node* output : region->output) {
             if(output->nt == NodeType::Phi) {
                 cache_values.add(output, loop_phi_cache[i]);
@@ -124,9 +113,10 @@ struct Evaluator {
         while(control != nullptr) {
             Node* next;
             switch(control->nt) {
+                case NodeType::Loop:
                 case NodeType::Region: {
                     NodeRegion* region = (NodeRegion*) control;
-                    if(region->loop && region->ctrl(0) != prev) {
+                    if(control->nt == NodeType::Loop && region->ctrl(0) != prev) {
                         if(loops == 0) { timeout = true; return 0; }
                         loops--;
                         this->latch_loop_phis((Node*)region, prev);

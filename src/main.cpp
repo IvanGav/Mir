@@ -34,14 +34,9 @@ int main(int argc, char* argv[]) {
     STOP_NODE = NodeStop::create();
     SCOPE_NODE = NodeScope::create(scope_arena, NodeProj::create(0, START_NODE, true));
     SCOPE_NODE->define("arg"_s, NodeProj::create(1, START_NODE, false));
-    SCOPE_NODE->define("$1"_s, NodeConst::create(type::pool.mem(type::pool.int_const(0)), START_NODE)); // manually load the alias class $1
+    SCOPE_NODE->define("$1"_s, NodeConst::create(type::pool.mem(type::pool.int_const(0)))); // manually load the alias class $1
     BREAK_SCOPE_NODE = CONTINUE_SCOPE_NODE = nullptr;
-    
-    // Str src;
-    // if(argc > 1)
-    //     src = readFile(argv[1]);
-    // else
-    //     src = readFile("mir/hello.mir");
+
     Str src = readFile("mir/hello.mir");
 
     Parser p = Parser::create(src);
@@ -57,7 +52,6 @@ int main(int argc, char* argv[]) {
     }
 
     SCOPE_NODE->pop();
-    // node::print_tree(START_NODE); // not very useful, when `dot` exists
 
     Str dot = compile::dot(START_NODE);
     writeFile("./graph.gv", dot);

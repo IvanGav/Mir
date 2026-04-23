@@ -85,6 +85,10 @@ struct TypePool {
     Type* int_const(i64 val) {
         return (Type*) this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .val_min = val, .val_max = val });
     }
+    // a shorter version of `int_const`; i'm giving in to the temptation of making code shorter than more verbose
+    Type* con(i64 val) {
+        return this->int_const(val);
+    }
     Type* int_range(i64 min, i64 max) {
         return (Type*) this->get_int(TypeInt { .self = Type {.tinfo = TypeI::Known, .ttype = TypeT::Int}, .val_min = min, .val_max = max });
     }

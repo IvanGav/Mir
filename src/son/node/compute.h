@@ -4,7 +4,6 @@
 #include "../type/const.h"
 
 namespace node {
-    // TODO why not assign to `n->type` directly?
     Type* compute(Node* n) {
         assert(n != nullptr);
         switch(n->nt) {
@@ -25,7 +24,8 @@ namespace node {
                 return (Type*) type::pool.get_tuple(TypeTuple { .self = Type { .tinfo = TypeI::Known, .ttype = TypeT::Tuple }, .val = val });
             }
 
-            case NodeType::Region: {
+            case NodeType::Region:
+            case NodeType::Loop: {
                 return type::pool.ctrl; // TODO
             }
             
@@ -64,17 +64,7 @@ namespace node {
                 return node->val;
             }
 
-            case NodeType::Add:
-            case NodeType::Sub:
-            case NodeType::Div:
-            case NodeType::Mul:
-            case NodeType::Mod:
-            case NodeType::Eq:
-            case NodeType::Neq:
-            case NodeType::Less:
-            case NodeType::Greater:
-            case NodeType::LessEq:
-            case NodeType::GreaterEq: {
+            case NodeType::BinOp: {
                 NodeBinOp* node = (NodeBinOp*)(n);
                 Type* lt = node->lhs()->type; Type* rt = node->rhs()->type;
                 assert(lt != nullptr); assert(rt != nullptr);
@@ -96,7 +86,7 @@ namespace node {
                 }
             }
 
-            case NodeType::Neg: {
+            case NodeType::UnOp: {
                 NodeUnOp* node = (NodeUnOp*)(n);
                 Type* rt = node->rhs()->type;
                 if(type::constant(rt)) {
@@ -138,7 +128,7 @@ namespace node {
                 NodeAllocA* node = (NodeAllocA*)(n);
                 Type* types[3];
                 types[0] = type::pool.ctrl;
-                types[1] = node->ptr;
+                types[1] = (Type*) node->ptr;
                 types[2] = type::pool.mem(node->mem()->type);
                 return type::pool.from_slice(Slice<Type*>::from_ptr(types, 3));
             }

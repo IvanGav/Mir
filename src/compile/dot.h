@@ -12,8 +12,9 @@ namespace compile {
         }
         switch(n->nt) {
             case NodeType::Scope: {
-                Slice<Str> s = Vec<Str>::with(str::from_int(n->uid), " [label=\"scope_node\"];"_s).full_slice();
-                output.push_slice(str::from_slice_of_str(s));
+                output.push_slice(str::cat(
+                    str::from_int(n->uid), " [label=\"scope_node\"];"_s
+                ));
                 break;
             }
 
@@ -31,22 +32,25 @@ namespace compile {
 
             case NodeType::Stop: {
                 Str uid = str::from_int(n->uid);
-                Slice<Str> s = Vec<Str>::with(uid, " [label=\"stop\"];\n"_s).full_slice();
-                output.push_slice(str::from_slice_of_str(s));
+                output.push_slice(str::cat(
+                    uid, " [label=\"stop\"];\n"_s
+                ));
                 break;
             }
 
             case NodeType::Ret: {
                 Str uid = str::from_int(n->uid);
-                Slice<Str> s = Vec<Str>::with(uid, " [label=\"return\"];\n"_s).full_slice();
-                output.push_slice(str::from_slice_of_str(s));
+                output.push_slice(str::cat(
+                    uid, " [label=\"return\"];\n"_s
+                ));
                 break;
             }
             
             case NodeType::Const: {
                 NodeConst* node = (NodeConst*) n;
-                Slice<Str> s = Vec<Str>::with(str::from_int(n->uid), " [label=\""_s, type::to_str(node->val), "\"];\n"_s).full_slice();
-                output.push_slice(str::from_slice_of_str(s));
+                output.push_slice(str::cat(
+                    str::from_int(n->uid), " [label=\""_s, type::to_str(node->val), "\"];\n"_s
+                ));
                 break;
             }
             
@@ -54,45 +58,46 @@ namespace compile {
             case NodeType::Proj: {
                 NodeProj* node = (NodeProj*) n;
                 Str uid = str::from_int(n->uid);
-                Slice<Str> s = Vec<Str>::with(uid, " [label=\"["_s, str::from_int(node->index), "]\"];\n"_s).full_slice();
-                output.push_slice(str::from_slice_of_str(s));
+                output.push_slice(str::cat(
+                    uid, " [label=\"["_s, str::from_int(node->index), "]\"];\n"_s
+                ));
                 break;
             }
 
             case NodeType::If: {
                 Str uid = str::from_int(n->uid);
-                Slice<Str> s = Vec<Str>::with(uid, " [label=\"if\"];\n"_s).full_slice();
-                output.push_slice(str::from_slice_of_str(s));
+                output.push_slice(str::cat(
+                    uid, " [label=\"if\"];\n"_s
+                ));
+                break;
+            }
+
+            case NodeType::Loop: {
+                Str uid = str::from_int(n->uid);
+                output.push_slice(str::cat(
+                    uid, " [label=\""_s, "loop"_s, "\"];\n"_s
+                ));
                 break;
             }
 
             case NodeType::Region: {
-                NodeRegion* node = (NodeRegion*) n;
                 Str uid = str::from_int(n->uid);
-                Vec<Str> s = Vec<Str>::with(uid, " [label=\""_s, node->loop ? "loop"_s : "region"_s, "\"];\n"_s);
-                output.push_slice(str::from_slice_of_str(ref(s.full_slice())));
+                output.push_slice(str::cat(
+                    uid, " [label=\""_s, "region"_s, "\"];\n"_s
+                ));
                 break;
             }
 
             case NodeType::Phi: {
                 NodePhi* node = (NodePhi*) n;
                 Str uid = str::from_int(n->uid);
-                Vec<Str> s = Vec<Str>::with(uid, " [label=\"phi_"_s, node->debug_var_name, "\"];\n"_s);
-                output.push_slice(str::from_slice_of_str(ref(s.full_slice())));
+                output.push_slice(str::cat(
+                    uid, " [label=\"phi_"_s, node->debug_var_name, "\"];\n"_s
+                ));
                 break;
             }
             
-            case NodeType::Add:
-            case NodeType::Sub:
-            case NodeType::Mul:
-            case NodeType::Div:
-            case NodeType::Mod:
-            case NodeType::Eq:
-            case NodeType::Neq:
-            case NodeType::Less:
-            case NodeType::Greater:
-            case NodeType::LessEq:
-            case NodeType::GreaterEq: {
+            case NodeType::BinOp: {
                 NodeBinOp* node = (NodeBinOp*) n;
                 Str uid = str::from_int(n->uid);
                 Slice<Str> s = Vec<Str>::with(uid, " [label=\""_s, op::symbol(node->op), "\"];\n"_s).full_slice();
@@ -100,7 +105,7 @@ namespace compile {
                 break;
             }
 
-            case NodeType::Neg: {
+            case NodeType::UnOp: {
                 NodeUnOp* node = (NodeUnOp*) n;
                 Str uid = str::from_int(n->uid);
                 Slice<Str> s = Vec<Str>::with(uid, " [label=\""_s, op::symbol(node->op), "\"];\n"_s).full_slice();
@@ -168,11 +173,10 @@ namespace compile {
                 Str uid = str::from_int(n->uid);
                 Str ctrl_uid = str::from_int(node->ctrl()->uid);
                 Str expr_uid = str::from_int(node->expr()->uid);
-                Slice<Str> s = Vec<Str>::with(
+                output.push_slice(str::cat(
                     ctrl_uid, " -> "_s, uid, " [style=dotted];\n"_s,
                     expr_uid, " -> "_s, uid, ";\n"_s
-                ).full_slice();
-                output.push_slice(str::from_slice_of_str(s));
+                ));
                 break;
             }
             
@@ -184,10 +188,9 @@ namespace compile {
                 NodeProj* node = (NodeProj*) n;
                 Str uid = str::from_int(n->uid);
                 Str src_uid = str::from_int(node->ctrl()->uid);
-                Slice<Str> s = Vec<Str>::with(
+                output.push_slice(str::cat(
                     src_uid, " -> "_s, uid, " [style=dotted];\n"_s
-                ).full_slice();
-                output.push_slice(str::from_slice_of_str(s));
+                ));
                 break;
             }
 
@@ -195,10 +198,9 @@ namespace compile {
                 NodeProj* node = (NodeProj*) n;
                 Str uid = str::from_int(n->uid);
                 Str src_uid = str::from_int(node->ctrl()->uid);
-                Slice<Str> s = Vec<Str>::with(
+                output.push_slice(str::cat(
                     src_uid, " -> "_s, uid, ";\n"_s
-                ).full_slice();
-                output.push_slice(str::from_slice_of_str(s));
+                ));
                 break;
             }
 
@@ -207,14 +209,14 @@ namespace compile {
                 Str uid = str::from_int(n->uid);
                 Str ctrl_uid = str::from_int(node->ctrl()->uid);
                 Str condition_uid = str::from_int(node->condition()->uid);
-                Slice<Str> s = Vec<Str>::with(
+                output.push_slice(str::cat(
                     ctrl_uid, " -> "_s, uid, " [style=dotted];\n"_s,
                     condition_uid, " -> "_s, uid, ";\n"_s
-                ).full_slice();
-                output.push_slice(str::from_slice_of_str(s));
+                ));
                 break;
             }
 
+            case NodeType::Loop:
             case NodeType::Region: {
                 NodeRegion* node = (NodeRegion*) n;
                 Str uid = str::from_int(n->uid);
@@ -248,37 +250,25 @@ namespace compile {
                 break;
             }
             
-            case NodeType::Add:
-            case NodeType::Sub:
-            case NodeType::Mul:
-            case NodeType::Div:
-            case NodeType::Mod:
-            case NodeType::Eq:
-            case NodeType::Neq:
-            case NodeType::Less:
-            case NodeType::Greater:
-            case NodeType::LessEq:
-            case NodeType::GreaterEq: {
+            case NodeType::BinOp: {
                 NodeBinOp* node = (NodeBinOp*) n;
                 Str uid = str::from_int(n->uid);
                 Str lhs_uid = str::from_int(node->lhs()->uid);
                 Str rhs_uid = str::from_int(node->rhs()->uid);
-                Slice<Str> s = Vec<Str>::with(
+                output.push_slice(str::cat(
                     lhs_uid, " -> "_s, uid, " [label=\"lhs\"];\n"_s,
                     rhs_uid, " -> "_s, uid, " [label=\"rhs\"];\n"_s
-                ).full_slice();
-                output.push_slice(str::from_slice_of_str(s));
+                ));
                 break;
             }
 
-            case NodeType::Neg: {
+            case NodeType::UnOp: {
                 NodeUnOp* node = (NodeUnOp*) n;
                 Str uid = str::from_int(n->uid);
                 Str rhs_uid = str::from_int(node->rhs()->uid);
-                Slice<Str> s = Vec<Str>::with(
+                output.push_slice(str::cat(
                     rhs_uid, " -> "_s, uid, ";\n"_s
-                ).full_slice();
-                output.push_slice(str::from_slice_of_str(s));
+                ));
                 break;
             }
 

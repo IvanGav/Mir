@@ -8,119 +8,86 @@
 //  by:     Keith D. Cooper, Timothy J. Harvey, and Ken Kennedy
 //  link:   https://www.cs.tufts.edu/~nr/cs257/archive/keith-cooper/dom14.pdf
 namespace node {
-    Node* idom(Node* n1, Node* n2); // forward def
+    CFGNode* idom(CFGNode* n1, CFGNode* n2);
 
-    // get immidiate dominator of `n`
-    // return nullptr if called on `NodeStart` or `NodeStop` without any returns
-    // panic on non-cfg node
-    // does not cache, so may be linear to the size of the program
-    Node* idom(Node* n) {
-        assert(node::cfg(n));
-        switch(n->nt) {
-            case NodeType::Start: return nullptr;
+    // Note: due to jank, these have been relocated to `static.h`
+    // to index into these vectors, use `CFGNode::cfgid` that's assigned during `compute_idom`
+    // u32 cfg_size; // number of cfg nodes in the graph
+    // Vec<CFGNode*> cfgrp; // reverse postordering of cfg nodes
+    // Vec<CFGNode*> dom; // array of immidiate dominators of all cfg nodes
+    // Vec<u32> domdepth; // depth in the dominator tree for all cfg nodes
+    // Vec<u32> loopdepth; // loop depth of all cfg nodes
 
-            case NodeType::Stop: {
-                NodeStop* node = (NodeStop*)n;
-                if(node->ctrl_size() == 0) return nullptr;
-                Node* common_idom = node->ctrl(0);
-                for(u32 i = 1; i < node->ctrl_size(); i++) {
-                    common_idom = node::idom(common_idom, node->ctrl(1));
-                }
-                return common_idom;
-            }
-            
-            case NodeType::Ret: {
-                NodeRet* node = (NodeRet*)n;
-                return node->ctrl(); // only has 1 ctrl input; must be the dominator
-            }
-
-            case NodeType::If: {
-                NodeIf* node = (NodeIf*)n;
-                return node->ctrl(); // only has 1 ctrl input; must be the dominator
-            }
-            
-            case NodeType::CtrlProj: {
-                NodeProj* node = (NodeProj*)n;
-                return node->ctrl(); // only has 1 ctrl input; must be the dominator
-            }
-            
-            case NodeType::Region: {
-                NodeRegion* node = (NodeRegion*)n;
-                assert(!node->is_incomplete());
-                Node* common_idom = node->ctrl(0);
-                for(u32 i = 1; i < node->ctrl_size(); i++) {
-                    common_idom = node::idom(common_idom, node->ctrl(1));
-                }
-                return common_idom;
-            }
-            
-            default: panic;
+    // fill the `cfgrp` with the postordering of the cfg graph
+    void cfg_postorder(CFGNode* n) {
+        for(u32 i = 0; i < n->ctrl_size(); i++) {
+            node::cfg_postorder(n->ctrl(i));
         }
-        unreachable;
+        cfgrp.push(n);
     }
 
-    // get first immidiate dominator of `n1` and `n2`
-    // panic on non-cfg node
-    // does not cache, so may be linear to the size of the program
-    Node* idom(Node* n1, Node* n2) {
+    // after parsing the graph, this function generates the idom tree of the graph, populating the arrays `cfgid`, `cfgrp`, `dom`, `domdepth` and `loopdepth`
+    void compute_idom() {
+        // default arena should be fine, since we only generate this once
+        cfgrp = Vec<CFGNode*>::create(default_arena);
+        dom = Vec<CFGNode*>::create(default_arena);
+        domdepth = Vec<u32>::create(default_arena);
+        loopdepth = Vec<u32>::create(default_arena);
+        CFGNode* start = START_NODE;
+        // get reverse postordering of the cfg graph
+        node::cfg_postorder(start);
+        cfgrp.reverse();
+        cfg_size = cfgrp.size;
+        // give all nodes their `cfgid`
+        for(u32 i = 0; i < cfg_size; i++) {
+            cfgrp[i]->cfgid = i;
+        }
+        // populate the `dom` and `domdepth` array
+        dom.resize(cfg_size); domdepth.resize(cfg_size);
+        // also assume that all other nodes have inputs; aka NodeStop has at least 1 return connected = no true infinite loops
+        // start at 1, because 0 is NodeStart (the only node with no idom)
+        // 1 loop over should be enough, since my graphs should be reducible (no goto's, basically)
+        bool changed = true; u32 loop_count = 0;
+        while(changed) {
+            changed = false;
+            for(u32 i = 1; i < cfg_size; i++) {
+                CFGNode* n = cfgrp[i];
+                CFGNode* common_idom = n->ctrl(0);
+                u32 max_depth = domdepth[n->ctrl(0)->cfgid];
+                for(u32 i = 1; i < n->ctrl_size(); i++) {
+                    common_idom = node::idom(common_idom, n->ctrl(i));
+                    max_depth = max(max_depth, domdepth[n->ctrl(i)->cfgid]);
+                }
+                if(dom[n->cfgid] != common_idom) {
+                    dom[n->cfgid] = common_idom;
+                    domdepth[n->cfgid] = max_depth;
+                    changed = true;
+                }
+            }
+            loop_count++;
+        }
+        if(loop_count != 2) {
+            std::cout << "--WARNING: create_idom took more than 2 loops" << std::endl;
+            printd(loop_count);
+        }
+        // find the loop depth of each cfg node
+        loopdepth.resize(cfg_size);
+        for(u32 i = 1; i < cfg_size; i++) {
+            CFGNode* n = cfgrp[i];
+            loopdepth[n->cfgid] = loopdepth[n->idom()->cfgid];
+            // NodeType::Loop is the header of the loop; if something has it as its idom, it must be inside of the loop
+            if(n->idom()->nt == NodeType::Loop) loopdepth[n->cfgid] += 1;
+        }
+    }
+
+    // get first immidiate dominator of 2 cfg nodes (aka where their dom paths meet)
+    CFGNode* idom(CFGNode* n1, CFGNode* n2) {
         // the algorithm is to go up the idom tree until we meet 
         assert(node::cfg(n1)); assert(node::cfg(n2));
-        while (n1 != n2) {
-            todo;
-            while (n1 < n2) // not literal pointer comparison
-                n1 = node::idom(n1);
-            while (n1 > n2)  // not literal pointer comparison
-                n2 = node::idom(n2);
+        while(n1 != n2) { // TODO make sure that these comparisons are right and not reversed (which the paper seems to suggest)
+            while(n1->cfgid > n2->cfgid) n1 = n1->idom();
+            while(n1->cfgid < n2->cfgid) n2 = n2->idom();
         }
         return n1;
-    }
-    
-    // get depth of `n` in the dominator tree
-    // `dom_depth(NodeStart) = 0`
-    // panic on non-cfg node
-    // does not cache, so may be linear to the size of the program
-    u32 dom_depth(Node* n) {
-        assert(node::cfg(n));
-        switch(n->nt) {
-            case NodeType::Start: return 0;
-
-            case NodeType::Stop: {
-                NodeStop* node = (NodeStop*)n;
-                if(node->ctrl_size() == 0) return 0;
-                u32 high_depth = node::dom_depth(node->ctrl(0));
-                for(u32 i = 1; i < node->ctrl_size(); i++) {
-                    high_depth = max(high_depth, node::dom_depth(node->ctrl(1)));
-                }
-                return high_depth;
-            }
-
-            case NodeType::Ret: {
-                NodeRet* node = (NodeRet*)n;
-                return 1 + node::dom_depth(node->ctrl()); // only has 1 ctrl input; must be the dominator
-            }
-
-            case NodeType::If: {
-                NodeIf* node = (NodeIf*)n;
-                return 1 + node::dom_depth(node->ctrl()); // only has 1 ctrl input; must be the dominator
-            }
-            
-            case NodeType::CtrlProj: {
-                NodeProj* node = (NodeProj*)n;
-                return 1 + node::dom_depth(node->ctrl()); // only has 1 ctrl input; must be the dominator
-            }
-            
-            case NodeType::Region: {
-                NodeRegion* node = (NodeRegion*)n;
-                assert(!node->is_incomplete());
-                u32 high_depth = node::dom_depth(node->ctrl(0));
-                for(u32 i = 1; i < node->ctrl_size(); i++) {
-                    high_depth = max(high_depth, node::dom_depth(node->ctrl(1)));
-                }
-                return high_depth;
-            }
-
-            default: panic;
-        }
-        unreachable;
     }
 }

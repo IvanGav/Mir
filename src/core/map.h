@@ -63,11 +63,11 @@ struct HMap {
         for(u32 attempts = 1; map[index].exists() && !(map[index].key == key); attempts++) {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
-        if(!(map[index].exists())) { size++; }
-        map[index].replace_with(key, val);
-        if(init_index != index) {
-            map[init_index].increment_hit_count();
+        if(!(map[index].exists())) {
+            size++;
+            if(init_index != index) { map[init_index].increment_hit_count(); }
         }
+        map[index].replace_with(key, val);
     }
 
     void resize() {

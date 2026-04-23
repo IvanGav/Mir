@@ -40,7 +40,7 @@ struct Parser {
             if(index == nullptr) return nullptr;
             if(!this->read_token(TokenType::RightBracket)) { error = "Expected ]"_s; return nullptr; }
             Node* mem = SCOPE_NODE->find("$1"_s); // TODO hardcoded
-            Node* offset = NodeBinOp::create(Op::Mul, index, NodeConst::create(8, START_NODE)); // TODO hardcoded
+            Node* offset = NodeBinOp::create(Op::Mul, index, NodeConst::create(8)); // TODO hardcoded
             Node* load_node = NodeLoad::create(1, mem, node, offset); // TODO hardcoded
             return load_node;
         }
@@ -52,14 +52,14 @@ struct Parser {
 
         switch(token.tt) {
             case TokenType::IntLiteral: {
-                return NodeConst::create(type::pool.int_const(str::to_int<u64>(token.val)), START_NODE, token);
+                return NodeConst::create(type::pool.int_const(str::to_int<u64>(token.val)));
             }
 
             // Unary operator; read the next term (operand)
             case TokenType::Special: {
                 Node* operand_expr = this->next_term();
                 if(operand_expr == nullptr) return nullptr;
-                return NodeUnOp::create(op::unary(token.val), operand_expr, token);
+                return NodeUnOp::create(op::unary(token.val), operand_expr);
             }
 
             case TokenType::LeftParenthese: {
@@ -71,7 +71,6 @@ struct Parser {
                 }
                 return expr;
             }
-
             
             // Read variable name or function call (including all args and both parentheses)
             case TokenType::Identifier: {
@@ -118,7 +117,6 @@ struct Parser {
             // Unexpected syntax
             default: {
                 Str errlist[2] = {"unexpected token "_s, to_str(token.tt) };
-                // error = str::from_slice_of_str(ref(Slice<Str>::from_ptr(errlist, 2)));
                 error = str::concat(errlist, 2);
                 return nullptr;
             }
@@ -145,7 +143,7 @@ struct Parser {
                 Node* ret_expr = this->next_primary_expr();
                 if(ret_expr == nullptr) return nullptr;
                 if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
-                Node* node_ret = NodeRet::create(SCOPE_NODE->ctrl(), ret_expr, token);
+                Node* node_ret = NodeRet::create(SCOPE_NODE->ctrl(), ret_expr);
                 STOP_NODE->push_input(node_ret); // register the return with the stop node
                 return node_ret;
             }
@@ -161,7 +159,7 @@ struct Parser {
                     initializer_expr = this->next_primary_expr();
                     if(initializer_expr == nullptr) return nullptr;
                 } else {
-                    initializer_expr = NodeConst::create(type::default_val(declared_type), START_NODE);
+                    initializer_expr = NodeConst::create(type::default_val(declared_type));
                 }
                 SCOPE_NODE->define(var_name.val, initializer_expr); // Defining var here
                 if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
@@ -192,7 +190,7 @@ struct Parser {
                     if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
                     Node* mem = SCOPE_NODE->find("$1"_s); // TODO hardcoded
                     Node* ptr = SCOPE_NODE->find(token.val);
-                    Node* offset = NodeBinOp::create(Op::Mul, index, NodeConst::create(8, START_NODE)); // TODO hardcoded
+                    Node* offset = NodeBinOp::create(Op::Mul, index, NodeConst::create(8)); // TODO hardcoded
                     expr->unkeep();
                     Node* store_node = NodeStore::create(1, mem, ptr, offset, expr); // TODO hardcoded
                     SCOPE_NODE->update("$1"_s, store_node); // TODO hardcoded
@@ -340,7 +338,7 @@ struct Parser {
         if(condition == nullptr) return nullptr;
         if(!this->read_token(TokenType::RightParenthese)) { error = "condition has to end with ')'"_s; return nullptr; }
 
-        Node* if_node = NodeIf::create(SCOPE_NODE->ctrl(), condition, token);
+        Node* if_node = NodeIf::create(SCOPE_NODE->ctrl(), condition);
 
         // Set up projection nodes
 
@@ -418,7 +416,7 @@ struct Parser {
         Node* condition = this->next_primary_expr();
         if(condition == nullptr) { return nullptr; }
         if(!this->read_token(TokenType::RightParenthese)) { error = "Expected ')' after 'while' condition"_s; return nullptr; }
-        Node* loop_cond_node = NodeIf::create(SCOPE_NODE->ctrl(), condition, while_token);
+        Node* loop_cond_node = NodeIf::create(SCOPE_NODE->ctrl(), condition);
         loop_cond_node->keep();
         Node* proj_t = NodeProj::create(0, loop_cond_node, true);
         loop_cond_node->unkeep();

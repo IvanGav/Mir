@@ -50,6 +50,13 @@ struct Vec {
         data = arena->realloc(data, this->capacity, capacity);
         this->capacity = capacity;
     }
+
+    void resize(usize size) {
+        if(size > capacity) reserve(size);
+        if(size > this->size)
+            mem::zero<T>(this->data + this->size, size - this->size);
+        this->size = size;
+    }
     
     bool empty() {
         return size == 0;

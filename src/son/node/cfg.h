@@ -11,27 +11,11 @@ namespace node {
             case NodeType::Ret:
             case NodeType::If:
             case NodeType::Region:
+            case NodeType::Loop:
             case NodeType::CtrlProj:
                 return true;
             
             default: return false;
-        }
-        unreachable;
-    }
-
-    // get the loop depth of `n`
-    u32 loop_depth(Node* n) {
-        assert(node::cfg(n));
-        switch(n->nt) {
-            case NodeType::Start:
-            case NodeType::Stop:
-            case NodeType::Ret:
-            case NodeType::If:
-            case NodeType::CtrlProj:
-            case NodeType::Region:
-                todo;
-
-            default: panic;
         }
         unreachable;
     }
