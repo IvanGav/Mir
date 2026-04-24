@@ -2,11 +2,12 @@
 
 #include "node.h"
 
+// Something something https://www.youtube.com/watch?v=5Po0gxfE7LA 1:40:00 path hack makes extra anti-deps sometimes, but lets you doing another path of post-dominance; even used in C2 so probably fine, although the idea of it is kinda eh
+
 // Global Code Motion algorithm
 namespace gcm {
     void schedule_early(NodeStart* start); // forward decl
     void schedule_late(NodeStop* start); // forward decl
-    void schedule_node_late(Node* n, Node** ns, Node** late); // forward decl
 
     // Assume no infinite loops TODO don't
     void build(NodeStart* start, NodeStop* stop) {
@@ -47,10 +48,8 @@ namespace gcm {
         assert(n->ctrl() != nullptr);
     }
 
-    // Visit all nodes in CFG Reverse Post-Order, essentially defs before uses
-    // (except at loops).  Since defs are visited first - and hoisted as early
-    // as possible, when we come to a use we place it just after its deepest
-    // input.
+    // find the earliest possible placement (ctrl) for every node
+    // sets each data node's ctrl to be earlies possible
     void schedule_early(NodeStart* start) {
         mem::Arena scratch = mem::Arena::create(1 MB);
         assert(node::cfg_size > 0); // `compute_idom` has been called
@@ -70,95 +69,9 @@ namespace gcm {
 
     /* schedule late */
 
-    void build_cfg_breadth(Node* stop, Node** ns, Node** late) {
-        mem::Arena scratch = mem::Arena::create(4 MB);
-        // Things on the worklist have some (but perhaps not all) uses done.
-        Vec<Node*> work = Vec<Node*>::create(scratch);
-        work.push(stop);
-        Node* n;
-
-        while((n = work.pop()) != nullptr) {
-            assert(late[n->uid] == nullptr); // No double visit
-            // These we know the late schedule of, and need to set early for loops
-            if(node::cfg(n)) {
-                late[n->uid] = node::is_block_head(n) ? n : n->input[0]; // TODO this must be gone, later
-            } else if(n->nt == NodeType::Phi) {
-                late[n->uid] = ((NodePhi*)n)->region();
-            } else if(n->nt == NodeType::Proj && node::cfg(n->input[0])) { // TODO remove this garbage
-                late[n->uid] = n->input[0]; // TODO again, remove
-            } else {
-                // All uses done?
-                for(Node* use : n->output) {
-                    // TODO why null check? I thought outputs are supposed to be non-null
-                    if(use != nullptr && late[use->uid] == nullptr) goto end_outer; // Nope, await all uses done
-                }
-
-                // Loads need their memory inputs' uses also done
-                if(n->nt == NodeType::Load) {
-                    NodeLoad* ld = (NodeLoad*)n;
-                    for(Node* memuse : ld->mem()->output) {
-                        if(late[memuse->uid] == nullptr &&
-                            // Load output directly defines memory
-                            (memuse->type->ttype == TypeT::Mem ||
-                            // Load output indirectly defines memory
-                            (memuse->type->ttype == TypeT::Tuple && ((TypeTuple*)memuse->type)->val[ld->mem_alias]->ttype == TypeT::Mem)) // TODO wtf
-                        ) {
-                            goto end_outer;
-                        }
-                    }
-                }
-
-                // All uses done, schedule
-                gcm::schedule_node_late(n,ns,late);
-            }
-
-            // Walk all inputs and put on worklist, as their last output might now be done
-            for(Node* input : n->input) {
-                if(input != nullptr && late[input->uid]== nullptr) {
-                    work.push(input);
-                    // if the input has a load output, maybe the load can fire
-                    for(Node* ld : input->output)
-                        if(ld->nt == NodeType::Load && late[ld->uid] == nullptr)
-                            work.push(ld);
-                }
-            }
-                
-            end_outer:;
-        }
-    }
-
-    void schedule_late(NodeStop* stop) {
-        mem::Arena scratch = mem::Arena::create(10 MB);
-        u32 num_nodes = Node::uid_counter;
-        Node** late = scratch.alloc<Node*>(num_nodes); mem::zero(late, num_nodes);
-        Node** ns = scratch.alloc<Node*>(num_nodes); mem::zero(ns, num_nodes);
-        // Breadth-first scheduling
-        gcm::build_cfg_breadth((Node*) stop, ns, late);
-        // Copy the best placement choice into the control slot
-        for(u32 i = 0; i < num_nodes; i++)
-            if(ns[i] != nullptr && !(ns[i]->nt == NodeType::Proj))
-                ns[i]->set_input(0, late[i]);
-    }
-
-    // Block of `output`.  Normally from late[] schedule, except for Phis, which go
-    // to the matching Region input.
-    Node* use_block(Node* n, Node* output, Node** late) {
-        if(output->nt != NodeType::Phi)
-            return late[output->uid];
-        NodePhi* phi = (NodePhi*) output;
-        Node* found = nullptr;
-        for(u32 i = 1; i < phi->self.input.size; i++) {
-            if(phi->self.input[i] == n)
-                if(found == nullptr) found = phi->region()->input[i];
-                else todo; // Can be more than once
-        }
-        assert(found != nullptr);
-        return found;
-    }
-
-    Node* anti_dep(NodeLoad* load, Node* stblk, Node* defblk, Node* lca, Node* st) {
+    CFGNode* anti_dep(NodeLoad* load, Node* stblk, Node* defblk, Node* lca, Node* st) {
         // Walk store blocks "reach" from its scheduled location to its earliest
-        for(; stblk != node::idom(defblk); stblk = node::idom(stblk)) {
+        for(; stblk != defblk->idom(); stblk = stblk->idom()) {
             // Store and Load overlap, need anti-dependence
             if(stblk->anti == load->self.uid) {
                 lca = node::idom(stblk, lca); // Raise Loads LCA
@@ -173,7 +86,7 @@ namespace gcm {
     Node* find_anti_dep(Node* lca, NodeLoad* load, Node* early, Node** late) {
         // We could skip final-field loads here.
         // Walk LCA->early, flagging Load's block location choices
-        for(Node* cfg = lca; early != nullptr && cfg != node::idom(early); cfg = node::idom(cfg))
+        for(Node* cfg = lca; early != nullptr && cfg != early->idom(); cfg = cfg->idom())
             cfg->anti = load->self.uid;
         // Walk load->mem uses, looking for Stores causing an anti-dep
         for(Node* mem : load->mem()->output) {
@@ -181,13 +94,13 @@ namespace gcm {
             case NodeType::Store: {
                 NodeStore* st = (NodeStore*) mem;
                 assert(late[st->self.uid] != nullptr);
-                lca = anti_dep(load, late[st->self.uid], st->self.input[0], lca, (Node*) st); // TODO no input[0] garbage
+                lca = anti_dep(load, late[st->self.uid], st->self.ctrl(), lca, (Node*) st);
                 break;
             }
             case NodeType::AllocA: {
                 NodeAllocA* st = (NodeAllocA*) mem;
                 assert(late[st->self.uid] != nullptr);
-                lca = anti_dep(load, late[st->self.uid], st->self.input[0], lca, (Node*)st); // TODO you know the drill
+                lca = anti_dep(load, late[st->self.uid], st->self.ctrl(), lca, (Node*)st);
                 break;
             }
             case NodeType::Phi: {
@@ -196,47 +109,149 @@ namespace gcm {
                 // No anti-dep edges but may raise the LCA.
                 for(u32 i = 1; i < phi->self.input.size; i++)
                     if(mem->input[i] == load->mem())
-                        lca = anti_dep(load, ((NodeRegion*)(phi->region()))->ctrl(i), load->mem()->input[0], lca, nullptr); // TODO bleh
+                        lca = anti_dep(load, ((NodeRegion*)(phi->region()))->ctrl(i), load->mem()->ctrl(), lca, nullptr);
                 break;
             }
             case NodeType::Load: // Loads do not cause anti-deps on other loads
             case NodeType::Ret: // Load must already be ahead of Return
-            case NodeType::Region: break;
+            case NodeType::Region:
+                break;
             case NodeType::Scope: panic; // Mem uses now on ScopeMin (What the heck is ScopeMin)
             default: panic;
             }
         }
         return lca;
     }
-
-    // Least loop depth first, then largest idepth
-    bool better(Node* lca, Node* best) {
-        return node::loop_depth(lca) < node::loop_depth(best) || node::idepth(lca) > node::idepth(best) || best->nt == NodeType::If;
+    
+    // CFG block (aka ctrl) of `output`. Normally from `late`, except for Phis, which go to the matching Region input.
+    Node* cfg_block_of(Node* n, Node* output, Node** late) {
+        if(output->nt != NodeType::Phi)
+            return late[output->uid];
+        NodePhi* phi = (NodePhi*) output;
+        Node* found = nullptr;
+        for(u32 i = 1; i < phi->self.input.size; i++) {
+            if(phi->self.input[i] == n)
+                if(found == nullptr) found = phi->region()->input[i];
+                else todo; // Can be more than once
+        }
+        assert(found != nullptr);
+        return found;
     }
 
+    // return true when `lca` is a better CFG block than `best`
+    bool better(CFGNode* lca, CFGNode* best) {
+        // TODO make sure that conditions 1 and 2 don't clash..
+        return (
+            lca->loop_depth() < best->loop_depth() || // we want to move things out of the loops
+            lca->idepth() > best->idepth() || // we want to put them inside of if statements when possible
+            best->nt == NodeType::If // um, not sure what this is doing here; apparently anything is better than an `if`?
+        );
+    }
+
+    // put node's best schedule in `late` and itself in `ns`
     void schedule_node_late(Node* n, Node** ns, Node** late) {
         // Walk uses, gathering the LCA (Least Common Ancestor) of uses
-        Node* early = node::cfg(n->input[0]) ? n->input[0] : n->input[0]->input[0]; // originally not `n->input[0]->input[0]` but `n->input[0]->cfg0()`
+        CFGNode* early = n->ctrl(); // calculated in `schedule_early`, so earliest possible ctrl for this node
         assert(early != nullptr);
-        Node* lca = nullptr;
-        for(Node* output : n->output)
-            if(output != nullptr)
-              lca = node::idom(gcm::use_block(n, output, late), lca);
+        assert(n->output.size > 0);
+        CFGNode* lca = gcm::cfg_block_of(n, n->output[0], late); // just grab the first one
+        // the lowest we can go is just above every output `n` has -> find idom of all outputs' cfg nodes (cfg blocks)
+        for(Node* output : n->output) {
+            lca = node::idom(gcm::cfg_block_of(n, output, late), lca);
+        }
 
         // Loads may need anti-dependencies, raising their LCA
         if(n->nt == NodeType::Load)
-            lca = find_anti_dep(lca, (NodeLoad*)n, early, late);
+            lca = gcm::find_anti_dep(lca, (NodeLoad*)n, early, late);
 
-        // Walk up from the LCA to the early, looking for best place.  This is
-        // the lowest execution frequency, approximated by least loop depth and
-        // deepest control flow.
-        Node* best = lca;
-        lca = node::idom(lca);       // Already found best for starting LCA
-        for(; lca != node::idom(early); lca = node::idom(lca))
-            if(better(lca, best))
-                best = lca;
+        // Walk up from the LCA to the early, looking for best place. 
+        // Effectively, try to minimize the execution frequency.
+        CFGNode* best = lca;
+        // TODO why call idom here?? wouldn't it schedule 1 block higher than we found to be the lowest, but still possible?
+        lca = lca->idom(); // Already found best for starting LCA
+        // TODO again, why comparing to early->idom() and not just early?
+        for(; lca != early->idom(); lca = lca->idom())
+            if(gcm::better(lca, best)) best = lca;
+        
         assert(best->nt != NodeType::If);
+        // TODO cliff said this is a garbage hack to make java happy about CME (concurrent modification exception), so maybe remove later?
         ns  [n->uid] = n;
         late[n->uid] = best;
+    }
+
+    void walk_breadth(Node* stop, Node** ns, Node** late) {
+        mem::Arena scratch = mem::Arena::create(4 MB);
+        // Things on the worklist have some (but perhaps not all) outputs done
+        Vec<Node*> work = Vec<Node*>::create(scratch);
+        work.push(stop);
+
+        while(!work.empty()) {
+            Node* n = work.pop();
+            assert(late[n->uid] == nullptr); // No double visit
+            // These we know the late schedule of, and need to set early for loops
+            if(n->cfg()) {
+                // we want to get the head of a block we schedule, and n->ctrl() will always get the head when `n` is a tail
+                late[n->uid] = node::is_block_head(n) ? n : n->ctrl(); // note that calling `ctrl(void)` on CFG nodes will assert they have only (CFG) input; just a minor error check
+            } else if(n->pinned()) {
+                // we know the only possible cfg block of a pinned node; pinned = `Phi` or `Proj`
+                late[n->uid] = n->ctrl();
+            } else {
+                // All outputs done?
+                for(Node* output : n->output) {
+                    assert(output != nullptr);
+                    if(late[output->uid] == nullptr) goto continue_outer; // Nope, await all uses done
+                }
+
+                // Loads need their memory inputs' uses also done
+                // this also means 2 loads cannot be input/output to each other
+                if(n->nt == NodeType::Load) {
+                    NodeLoad* load = (NodeLoad*)n;
+                    for(Node* memuse : load->mem()->output) {
+                        // TODO check if correct because I have no clue rn
+                        if(late[memuse->uid] == nullptr &&
+                            // Load output directly defines memory
+                            (memuse->type->ttype == TypeT::Mem ||
+                            // Load output indirectly defines memory
+                            (memuse->type->ttype == TypeT::Tuple && ((TypeTuple*)memuse->type)->val[load->mem_alias]->ttype == TypeT::Mem)) // TODO wtf
+                        ) {
+                            goto continue_outer;
+                        }
+                    }
+                }
+
+                // All uses done, schedule; note that only called for non-cfg and non-pinned nodes
+                gcm::schedule_node_late(n,ns,late);
+            }
+
+            // Walk all inputs and put on worklist, as all of their outputs might now be done
+            for(Node* input : n->input) {
+                assert(input != nullptr); // should've been scheduled in `early`, and no other inputs may be nullptr (for now at least)
+                if(late[input->uid] == nullptr) { // i'm assuming it's only needed because of load edges that we check in both directions
+                    work.push(input);
+                    // if the input has a load output, maybe the load can fire
+                    for(Node* load : input->output)
+                        if(load->nt == NodeType::Load && late[load->uid] == nullptr)
+                            work.push(load);
+                }
+            }
+                
+            continue_outer:;
+        }
+    }
+
+    // find the best possible placement (ctrl) for every node (after finding the latest possible)
+    // sets each data node's ctrl to be best found
+    void schedule_late(NodeStop* stop) {
+        mem::Arena scratch = mem::Arena::create(10 MB);
+        u32 num_nodes = Node::uid_counter;
+        Node** late = scratch.alloc<Node*>(num_nodes); mem::zero(late, num_nodes);
+        Node** ns = scratch.alloc<Node*>(num_nodes); mem::zero(ns, num_nodes);
+        gcm::walk_breadth((Node*) stop, ns, late); // find best cfg block
+        // Copy the best placement choice into the ctrl slot
+        for(u32 i = 0; i < num_nodes; i++) {
+            // if(ns[i] != nullptr && !(ns[i]->nt == NodeType::Proj))
+            if(ns[i] != nullptr && !ns[i]->pinned()) // TODO ..right? why would it be everything that's pinned *but* not Proj?
+                ns[i]->set_ctrl(late[i]);
+        }
     }
 }

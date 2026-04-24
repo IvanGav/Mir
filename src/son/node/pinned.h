@@ -6,7 +6,7 @@ namespace node {
     bool pinned(Node* n) {
         assert(n != nullptr);
         switch(n->nt) {
-            // ctrl defines what to "pin" to
+            // ctrl define "pinned"
             case NodeType::Start:
             case NodeType::Stop:
             case NodeType::Ret:
@@ -14,17 +14,16 @@ namespace node {
             case NodeType::Region:
             case NodeType::Loop:
             case NodeType::CtrlProj:
-                return true;
+                panic;
             
-            // cannot be moved freely
-            case NodeType::Proj:
-            case NodeType::Load:
-            case NodeType::Store:
-            case NodeType::AllocA:
-            case NodeType::Phi:
+            case NodeType::Proj: // projects onto a specific ctrl node
+            case NodeType::Phi: // merges variables of a speicifc region node
                 return true;
 
             // can move freely
+            case NodeType::Load:
+            case NodeType::Store:
+            case NodeType::AllocA:
             case NodeType::Const:
             case NodeType::BinOp:
             case NodeType::UnOp:
