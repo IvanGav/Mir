@@ -21,6 +21,7 @@ namespace node {
 
     // fill the `cfgrp` with the postordering of the cfg graph
     void cfg_postorder(CFGNode* n, BitSet& visited) {
+        assert(n->cfg());
         if(visited[n->uid]) return;
         visited.set(n->uid);
         for(u32 i = 0; i < n->output.size; i++) {

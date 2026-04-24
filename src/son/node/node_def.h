@@ -214,5 +214,11 @@ struct Node {
     CFGNode* ctrl(u32 i) { return node::get_cfg_ctrl(this, i); }
     // get (this) cfg node's number of (ctrl) inputs
     u32 ctrl_size() { return node::ctrl_size(this); }
+
+    void set_ctrl(CFGNode* new_ctrl) {
+        assert(!this->cfg());
+        assert(new_ctrl->cfg());
+        this->set_input(0,new_ctrl);
+    }
     
 };
