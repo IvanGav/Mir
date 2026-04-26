@@ -17,8 +17,8 @@ std::ostream& operator<<(std::ostream& os, NodeType nt) {
         case NodeType::Loop:        return os << "Loop";
         case NodeType::Phi:         return os << "Phi";
         case NodeType::Const:       return os << "Const";
-        case NodeType::BinOp:       todo;
-        case NodeType::UnOp:        todo;
+        case NodeType::BinOp:       return os << "BinOp";
+        case NodeType::UnOp:        return os << "UnOp";
         case NodeType::Load:        return os << "Load";
         case NodeType::Store:       return os << "Store";
         case NodeType::AllocA:      return os << "AllocA";

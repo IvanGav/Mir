@@ -35,12 +35,13 @@ namespace gcm {
         // skip index 0 because all data nodes are defined to have it as their ctrl (aka cfg node)
         for(u32 i = 1; i < n->input.size; i++) {
             assert(n->input[i] != nullptr);
-            if(n->input[i]->nt != NodeType::Phi)
+            // if(n->input[i]->nt != NodeType::Phi)
+            if(!n->input[i]->pinned()) // TODO ..right?
                 gcm::schedule_node_early(n->input[i], visit);
         }
         
         // Pinned nodes already have ctrl assigned and are not allowed to move
-        if(!node::pinned(n)) {
+        if(!n->pinned()) {
             // Schedule at deepest input
             Node* early = n->ctrl();
             if(early == nullptr) early = START_NODE; // should be true for most/all nodes, but still
@@ -69,7 +70,7 @@ namespace gcm {
             Node* cfg = rpo[i];
             for(Node* n : cfg->input)
                 gcm::schedule_node_early(n, visit);
-            if(cfg->nt == NodeType::Region)
+            if(cfg->nt == NodeType::Region || cfg->nt == NodeType::Loop)
                 for(Node* phi : cfg->output)
                     if(phi->nt == NodeType::Phi)
                         gcm::schedule_node_early(phi, visit);
@@ -310,9 +311,8 @@ namespace gcm {
         // Copy the best placement choice into the ctrl slot
         for(u32 i = 0; i < num_nodes; i++) {
             // if(ns[i] != nullptr && !(ns[i]->nt == NodeType::Proj))
-            if(ns[i] != nullptr && !ns[i]->pinned()) {// TODO ..right? why would it be everything that's pinned *but* not Proj?
+            if(ns[i] != nullptr && !ns[i]->pinned()) { // TODO ..right? why would it be everything that's pinned *but* not Proj?
                 ns[i]->set_ctrl(late[i]);
-                // std::cout << "--- " << ns[i]->uid << std::endl;
             }
         }
     }

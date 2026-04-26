@@ -550,6 +550,7 @@ struct NodeScope {
         cur_ctrl->complete(back->ctrl());
         for(u32 i = 1; i < self.input.size; i++) {
             if(back->self.input[i] != (Node*)this) {
+                // TODO that's not true, it can be const apparently: `let b; while(...) { b = 1; ... };`
                 // will be a lazy phi
                 NodePhi* phi = (NodePhi*)self.input[i]; // technically might be unsafe, but should always be true
                 assert(phi->self.nt == NodeType::Phi);

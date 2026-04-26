@@ -53,8 +53,25 @@ struct Tokenizer {
     }
     void skip_comment() {
         if(!is_at_comment()) return;
-        while(!this->eof() && this->peek() != '\n') {
-            at++;
+        at++; // skip the first #
+        if(this->peek() == '#') {
+            // this is a comment block, read until ##
+            at++; // skip the second #
+            bool can_end = false;
+            while(!this->eof()) {
+                if(this->peek() == '#') {
+                    if(can_end) { at++; return; }
+                    else { can_end = true; }
+                } else {
+                    can_end = false;
+                }
+                at++;
+            }
+        } else {
+            // this is a line comment, read until newline
+            while(!this->eof() && this->peek() != '\n') {
+                at++;
+            }
         }
     }
     // Calling this will make sure that `at` is pointing to the start of a significant symbol

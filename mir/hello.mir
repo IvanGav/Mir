@@ -1,3 +1,4 @@
+##
 let arr: i64[10];
 arr[0] = 1;
 
@@ -12,3 +13,21 @@ if(arg < 10) {
 arr[1] = 10;
 
 return i + 10 + arr[1];
+##
+
+
+
+let arr: i64[10];
+
+let i: i64 = 5;
+
+while(arg < 10) {
+    i = arg; # TODO investigate what the heck is happening here
+    arr[arg] = arg;
+    arg = arg + arr[arg];
+    i = i + arg;
+};
+
+arr[0] = 10;
+
+return i + arr[0];
