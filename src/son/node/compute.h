@@ -46,8 +46,9 @@ namespace node {
                     // return node::glb(node->data(0)->type);
                     Type* t = node->data(0)->type;
                     if(t->ttype == TypeT::Mem) {
-                        TypePtr* memtype = (TypePtr*) type::pool.get_bottom(t->ttype);
+                        TypePtr* memtype = (TypePtr*) type::pool.get_bottom(TypeT::Mem);
                         memtype->ptr = type::pool.get_bottom(((TypePtr*) t)->ptr->ttype);
+                        return (Type*) memtype;
                     }
                     return type::pool.get_bottom(t->ttype);
                 }

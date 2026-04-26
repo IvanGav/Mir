@@ -14,6 +14,10 @@ namespace type {
     Type* meet(Type* t1, Type* t2) {
         assert(t1 != nullptr);
         assert(t2 != nullptr);
+
+        if(t1 == type::pool.top) return t2; // anything with Pure:Top is the other thing
+        if(t2 == type::pool.top) return t1; // anything with Pure:Top is the other thing
+
         // meet of two unrelated types is always Pure:Bottom
         if(t1->ttype != t2->ttype) return pool.bottom;
 

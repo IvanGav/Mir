@@ -14,7 +14,7 @@ namespace node {
             case NodeType::Region:
             case NodeType::Loop:
             case NodeType::CtrlProj:
-                panic;
+                return true;
             
             case NodeType::Proj: // projects onto a specific ctrl node
             case NodeType::Phi: // merges variables of a speicifc region node

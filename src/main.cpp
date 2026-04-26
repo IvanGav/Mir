@@ -9,7 +9,9 @@
 #include "core/map.h"
 
 #include "son/parser.h"
+#include "son/global_code_motion.h"
 
+#include "compile/dump.h"
 #include "compile/dot.h"
 #include "compile/graph_evaluator.h"
 
@@ -63,12 +65,6 @@ int main(int argc, char* argv[]) {
     }
 
     node::compute_idom();
-
-    // for(u32 i = 0; i < node::cfg_size; i++) {
-    //     std::cout << 
-    //         node::cfgrp[i]->nt << " is dominated by " << 
-    //         node::dom[node::cfgrp[i]->cfgid]->nt << " and has idepth = " <<
-    //         node::domdepth[node::cfgrp[i]->cfgid] << " and loop depth = " <<
-    //         node::loopdepth[node::cfgrp[i]->cfgid] << std::endl;
-    // }
+    gcm::build((NodeStart*) START_NODE, (NodeStop*) STOP_NODE);
+    std::cout << compile::dump(START_NODE);
 }

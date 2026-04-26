@@ -160,4 +160,27 @@ namespace node {
         std::fill(arr, arr + size, false);
         node::print_tree(root, arr);
     }
+
+    Str to_str(NodeType nt) {
+    switch (nt) {
+        case NodeType::Undefined:   return "Undefined"_s;
+        case NodeType::Scope:       return "Scope"_s;
+        case NodeType::Start:       return "Start"_s;
+        case NodeType::Stop:        return "Stop"_s;
+        case NodeType::Ret:         return "Ret"_s;
+        case NodeType::Proj:        return "Proj"_s;
+        case NodeType::CtrlProj:    return "CtrlProj"_s;
+        case NodeType::If:          return "If"_s;
+        case NodeType::Region:      return "Region"_s;
+        case NodeType::Loop:        return "Loop"_s;
+        case NodeType::Phi:         return "Phi"_s;
+        case NodeType::Const:       return "Const"_s;
+        case NodeType::BinOp:       return "BinOp"_s;
+        case NodeType::UnOp:        return "UnOp"_s;
+        case NodeType::Load:        return "Load"_s;
+        case NodeType::Store:       return "Store"_s;
+        case NodeType::AllocA:      return "AllocA"_s;
+    }
+    unreachable;
+}
 }

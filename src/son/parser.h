@@ -188,11 +188,11 @@ struct Parser {
                     if(expr == nullptr) return nullptr;
                     expr->keep();
                     if(!this->read_token(TokenType::EndOfLine)) { error = "Expected ;"_s; return nullptr; }
-                    Node* mem = SCOPE_NODE->find("$1"_s); // TODO hardcoded
+                    Node* mem = SCOPE_NODE->find("$1"_s); // TODO alias hardcoded
                     Node* ptr = SCOPE_NODE->find(token.val);
-                    Node* offset = NodeBinOp::create(Op::Mul, index, NodeConst::create(8)); // TODO hardcoded
+                    Node* offset = NodeBinOp::create(Op::Mul, index, NodeConst::create(8)); // TODO offset hardcoded
                     expr->unkeep();
-                    Node* store_node = NodeStore::create(1, mem, ptr, offset, expr); // TODO hardcoded
+                    Node* store_node = NodeStore::create(1, mem, ptr, offset, expr); // TODO alias hardcoded
                     SCOPE_NODE->update("$1"_s, store_node); // TODO hardcoded
                     return expr;
                 }

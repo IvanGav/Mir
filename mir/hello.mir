@@ -1,26 +1,14 @@
-let prime: i64 = 1;
+let arr: i64[10];
+arr[0] = 1;
 
-let counter: i64 = 1;
+let i: i64 = 5;
 
-if (arg == 1) {
-    return 2;
+if(arg < 10) {
+    arr[arg] = 10;
 } else {
-    while(counter != arg) {
-        prime = prime + 2;
-        let flag: i64 = 1;
-
-        let i: i64 = 3;
-        while (i < prime) {
-            if ((prime % i) == 0) {
-                flag = 0; # should break, but i don't implement break for now
-            };
-            i = i + 2;
-        };
-
-        if(flag == 1) {
-            counter = counter + 1;
-        };
-    };
+    i = arr[0];
 };
 
-return prime;
+arr[1] = 10;
+
+return i + 10 + arr[1];
