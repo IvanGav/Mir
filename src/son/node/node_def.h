@@ -216,7 +216,7 @@ struct Node {
     u32 ctrl_size() { return node::ctrl_size(this); }
 
     void set_ctrl(CFGNode* new_ctrl) {
-        assert(!this->cfg());
+        assert(!this->pinned());
         assert(new_ctrl->cfg());
         this->set_input(0,new_ctrl);
     }

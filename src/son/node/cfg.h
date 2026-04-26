@@ -34,6 +34,8 @@ namespace node {
             case NodeType::Ret:
             case NodeType::If:
                 return false;
+            
+            default: unreachable;
         }
         unreachable;
     }

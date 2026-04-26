@@ -9,7 +9,16 @@ namespace gcm {
     void schedule_early(NodeStart* start); // forward decl
     void schedule_late(NodeStop* start); // forward decl
 
-    // Assume no infinite loops TODO don't
+    BitSet anti_deps{.arena=&default_arena}; // marked CFG nodes (by CFGNode::cfgid) are visited on the path lca->START for some load/store node when computing its anti-dependencies
+
+    // In a bunch of functions there's a `for(Node a = ...; a < b->idom(); a = a->idom()) {...}`
+    // The reason we're going up to `b->idom()` is the same reason we go until `vec.size` and not `vec.size-1`; off by 1 kind of thing, we still want to look at `a == b`, but not any further
+
+    // About anti-deps:
+    // if we already scheduled a store, we still need to know where it *could have* been, because if the load never looks through a branch that the store is in, it will never know that the store even happend; though why not go until load's early block instad?
+    // "Do we always know the load must go before the store" - yes.. we walk over all stores that *overwrite* the qequired memory (aka the stores that take in needed memory and write to it)
+
+    // Assume no infinite loops
     void build(NodeStart* start, NodeStop* stop) {
         gcm::schedule_early(start);
         gcm::schedule_late(stop);
@@ -69,55 +78,61 @@ namespace gcm {
 
     /* schedule late */
 
-    CFGNode* anti_dep(NodeLoad* load, Node* stblk, Node* defblk, Node* lca, Node* st) {
-        // Walk store blocks "reach" from its scheduled location to its earliest
-        for(; stblk != defblk->idom(); stblk = stblk->idom()) {
+    // if `store`'s legal range intersects `load`'s currently known legal range, make sure they have an anti-dep = an order is enforced
+    // ^ that's how it's in Simple.  My modified version does the following:
+    // If `store`'s scheduled location intersects `load`'s currently known legal range, give them an anti-dep = an order is enforced NOT IMPLEMENTED 
+    CFGNode* anti_dep(NodeLoad* load, CFGNode* store_block, CFGNode* def_block, Node* lca, Node* store) {
+        // Walk store blocks "reach" from its scheduled location to its earliest (inclusive)
+        for(; store_block != def_block->idom(); store_block = store_block->idom()) {
             // Store and Load overlap, need anti-dependence
-            if(stblk->anti == load->self.uid) {
-                lca = node::idom(stblk, lca); // Raise Loads LCA
-                if(lca == stblk && st != nullptr && !st->input.contains((Node*)load)) // And if something moved,
-                    st->push_input((Node*)load);   // Add anti-dep as well
-                return lca;            // Cap this stores' anti-dep to here
+            if(gcm::anti_deps[store_block->cfgid]) {
+                lca = node::idom(store_block, lca); // Raise Load's LCA
+                // And if something moved,
+                if(
+                    store != nullptr && // if we have an explicit store
+                    lca == store_block && // and scheduling `load` in the same block as `store`
+                    !store->input.contains((Node*)load) // and it's already not an anti-dep
+                ) store->push_input((Node*)load); // Add anti-dep as well (aka load must finish before store)
+                return lca; // Cap this store's anti-dep to here
             }
         }
         return lca;
     }
 
-    Node* find_anti_dep(Node* lca, NodeLoad* load, Node* early, Node** late) {
-        // We could skip final-field loads here.
+    // TODO why is `early` even an arg? it's just `load->ctrl()`..?
+    // TODO get rid of `late` eventually
+    // Anti-deps are weird; more on them and this algorithm in the video that's linked at the top
+    CFGNode* find_anti_dep(CFGNode* lca, NodeLoad* load, CFGNode* early, CFGNode** late) {
+        // TODO might be more efficient to manually zero out at the end of the function by walking instead of memsetting?
+        gcm::anti_deps.clear(); // this info is stored per node (and thus reset before looking at each node)
         // Walk LCA->early, flagging Load's block location choices
-        for(Node* cfg = lca; early != nullptr && cfg != early->idom(); cfg = cfg->idom())
-            cfg->anti = load->self.uid;
-        // Walk load->mem uses, looking for Stores causing an anti-dep
+        for(CFGNode* cfg = lca; early != nullptr && cfg != early->idom(); cfg = cfg->idom())
+            gcm::anti_deps.set(cfg->cfgid); // cfg->anti = load->self.uid;
+        // Walk load->mem outputs, looking for Stores causing an anti-dep
         for(Node* mem : load->mem()->output) {
             switch(mem->nt) {
-            case NodeType::Store: {
-                NodeStore* st = (NodeStore*) mem;
-                assert(late[st->self.uid] != nullptr);
-                lca = anti_dep(load, late[st->self.uid], st->self.ctrl(), lca, (Node*) st);
-                break;
-            }
-            case NodeType::AllocA: {
-                NodeAllocA* st = (NodeAllocA*) mem;
-                assert(late[st->self.uid] != nullptr);
-                lca = anti_dep(load, late[st->self.uid], st->self.ctrl(), lca, (Node*)st);
-                break;
-            }
-            case NodeType::Phi: {
-                NodePhi* phi = (NodePhi*) mem;
-                // Repeat anti-dep for matching Phi inputs.
-                // No anti-dep edges but may raise the LCA.
-                for(u32 i = 1; i < phi->self.input.size; i++)
-                    if(mem->input[i] == load->mem())
-                        lca = anti_dep(load, ((NodeRegion*)(phi->region()))->ctrl(i), load->mem()->ctrl(), lca, nullptr);
-                break;
-            }
-            case NodeType::Load: // Loads do not cause anti-deps on other loads
-            case NodeType::Ret: // Load must already be ahead of Return
-            case NodeType::Region:
-                break;
-            case NodeType::Scope: panic; // Mem uses now on ScopeMin (What the heck is ScopeMin)
-            default: panic;
+                case NodeType::Store:
+                case NodeType::AllocA: {
+                    assert(late[mem->uid] != nullptr);
+                    lca = anti_dep(load, late[mem->uid], mem->ctrl(), lca, mem);
+                    break;
+                }
+                case NodeType::Phi: {
+                    // Repeat anti-dep for matching Phi inputs. No anti-dep edges but may raise the LCA.
+                    for(u32 i = 1; i < mem->input.size; i++) {
+                        if(mem->input[i] == mem) {
+                            // note that `mem->ctrl()->ctrl(i)` means "get ctrl path of phi's region that corresponds to the `mem`"
+                            lca = anti_dep(load, mem->ctrl()->ctrl(i), load->mem()->ctrl(), lca, nullptr);
+                        }
+                    }
+                    break;
+                }
+                case NodeType::Load: // Loads do not cause anti-deps on other loads
+                case NodeType::Ret: // Load must already be ahead of Return
+                case NodeType::Region:
+                    break;
+                case NodeType::Scope: panic; // Mem uses now on ScopeMin (What the heck is ScopeMin)
+                default: panic; // no other node should be consuming `mem` (have a mem edge input)
             }
         }
         return lca;
@@ -169,7 +184,6 @@ namespace gcm {
         CFGNode* best = lca;
         // TODO why call idom here?? wouldn't it schedule 1 block higher than we found to be the lowest, but still possible?
         lca = lca->idom(); // Already found best for starting LCA
-        // TODO again, why comparing to early->idom() and not just early?
         for(; lca != early->idom(); lca = lca->idom())
             if(gcm::better(lca, best)) best = lca;
         

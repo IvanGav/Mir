@@ -139,7 +139,7 @@ struct Evaluator {
                     next = this->find_control(control);
                     break;
                 }
-                default: printe("Evaluator Runtime Error: Unexpected Node", control);
+                default: printe("Evaluator Runtime Error: Unexpected Node", control); panic;
             }
             prev = control;
             control = next;

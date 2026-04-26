@@ -52,7 +52,7 @@ typedef double f64;
 #define KB *1024
 #define MB *1024*1024
 
-#define unreachable { assert(false); std::abort(); }
+#define unreachable { assert(false); /*__builtin_unreachable();*/ std::abort(); }
 
 #define panic { std::cout << ("BAD SYNTAX\n"); assert(false); std::abort(); }
 
@@ -94,7 +94,7 @@ usize next_prime_size(usize n) {
     for(usize i = 0; i < 26; i++) {
         if(prime_sizes[i] > n) return prime_sizes[i];
     }
-    unreachable;
+    panic;
 }
 
 u8 sizeofival(i64 val) {

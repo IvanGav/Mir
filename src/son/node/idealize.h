@@ -126,8 +126,7 @@ namespace node {
 
         // Add of same is a multiply by 2
         if(lhs == rhs) {
-            Node* multiplier = NodeConst::create(2);
-            return NodeBinOp::create(Op::Mul, lhs, multiplier);
+            return NodeBinOp::create(Op::Mul, lhs, NodeConst::create(2));
         }
 
         // Move ops such that: adds are on the left, consts are on the right

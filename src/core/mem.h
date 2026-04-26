@@ -72,7 +72,7 @@ namespace mem {
             }
             cur = (u8*) ptr + sizeof(T) * size;
             return (T*) ptr;
-        };
+        }
 
         // does **not** zero initialize
         template <typename T>
@@ -83,7 +83,7 @@ namespace mem {
             *ptr = item;
             // return tptr;
             return ptr;
-        };
+        }
         
         // does **not** zero initialize
         template <typename T>
@@ -105,7 +105,7 @@ namespace mem {
             mem::copy(out, ptr, last_size);
             // printf("----reallocating and copying at %p (size=%ld) to %p (size=%ld)\n", ptr, last_size, out, new_size);
             return out;
-        };
+        }
 
         template <typename T>
         T* clone(T* ptr, usize size) {
