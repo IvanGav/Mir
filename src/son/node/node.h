@@ -550,12 +550,15 @@ struct NodeScope {
         cur_ctrl->complete(back->ctrl());
         for(u32 i = 1; i < self.input.size; i++) {
             if(back->self.input[i] != (Node*)this) {
-                // TODO that's not true, it can be const apparently: `let b; while(...) { b = 1; ... };`
-                // will be a lazy phi
-                NodePhi* phi = (NodePhi*)self.input[i]; // technically might be unsafe, but should always be true
-                assert(phi->self.nt == NodeType::Phi);
-                assert(phi->region() == (Node*)cur_ctrl && phi->is_incomplete());
-                phi->complete(back->self.input[i]);
+                // will be a lazy phi OR something else if assigned but never accessed inside the loop
+                if(self.input[i]->nt == NodeType::Phi) {
+                    NodePhi* phi = (NodePhi*)self.input[i]; // technically might be unsafe, but should always be true
+                    assert(phi->region() == (Node*)cur_ctrl && phi->is_incomplete());
+                    phi->complete(back->self.input[i]);
+                } else {
+                    assert(back->self.input[i] != nullptr);
+                    self.set_input(i, back->self.input[i]);
+                }
             }
             if(exit->self.input[i] == (Node*)this) // Replace a lazy-phi on the exit path too
                 exit->self.set_input(i, self.input[i]);
