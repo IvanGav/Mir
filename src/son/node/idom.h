@@ -87,7 +87,7 @@ namespace node {
             CFGNode* n = cfgrp[i];
             loopdepth[n->cfgid] = loopdepth[n->idom()->cfgid];
             // NodeType::Loop is the header of the loop; if something has it as its idom, it must be inside of the loop
-            if(n->idom()->nt == NodeType::Loop) loopdepth[n->cfgid] += 1;
+            if(n->nt == NodeType::Loop) loopdepth[n->cfgid] += 1;
         }
     }
 

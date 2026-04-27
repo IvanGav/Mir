@@ -18,16 +18,22 @@ namespace gcm {
     // if we already scheduled a store, we still need to know where it *could have* been, because if the load never looks through a branch that the store is in, it will never know that the store even happend; though why not go until load's early block instad?
     // "Do we always know the load must go before the store" - yes.. we walk over all stores that *overwrite* the qequired memory (aka the stores that take in needed memory and write to it)
 
+    // u32 watch_uid = 24; //28; //33;
+    // Node* watch = nullptr;
+
     // Assume no infinite loops
     void build(NodeStart* start, NodeStop* stop) {
         gcm::schedule_early(start);
+        // if(watch != nullptr) std::cout << "---- early of " << str::from_int(watch_uid) << " = " << watch->ctrl()->uid << std::endl;
         gcm::schedule_late(stop);
+        // if(watch != nullptr) std::cout << "---- late of " << str::from_int(watch_uid) << " = " << watch->ctrl()->uid << std::endl;
     }
 
     /* schedule early */
 
     // given a non-cfg node, schedule it as early as possible
     void schedule_node_early(Node* n, BitSet& visit) {
+        // if(n->uid == watch_uid) watch = n;
         if(n == nullptr || n->cfg() || visit[n->uid]) return;
         visit.set(n->uid);
 
@@ -202,12 +208,17 @@ namespace gcm {
 
     // return true when `lca` is a better CFG block than `best`
     bool better(CFGNode* lca, CFGNode* best) {
-        // TODO make sure that conditions 1 and 2 don't clash..
-        return (
-            lca->loop_depth() < best->loop_depth() || // we want to move things out of the loops
-            lca->idepth() > best->idepth() || // we want to put them inside of if statements when possible
-            best->nt == NodeType::If // um, not sure what this is doing here; apparently anything is better than an `if`?
-        );
+        if(best->nt == NodeType::If) return true; // don't want to be at block tail
+        if(lca->loop_depth() < best->loop_depth()) {
+            // we want to move things out of the loops)
+            return true;
+        }
+        return lca->idepth() > best->idepth(); // we want to put them inside of if statements when possible
+        // return (
+        //     lca->loop_depth() < best->loop_depth() || // we want to move things out of the loops
+        //     lca->idepth() > best->idepth() || // we want to put them inside of if statements when possible
+        //     best->nt == NodeType::If // um, not sure what this is doing here; apparently anything is better than an `if`?
+        // );
     }
 
     // put node's best schedule in `late` and itself in `ns`
@@ -222,17 +233,28 @@ namespace gcm {
             lca = node::idom(gcm::cfg_block_of(n, output, late), lca);
         }
 
+        // if(n->uid == watch_uid) std::cout << "---- lca of " << str::from_int(watch_uid) << " = " << lca->uid << std::endl;
+
         // Loads may need anti-dependencies, raising their LCA
-        if(n->nt == NodeType::Load)
+        if(n->nt == NodeType::Load) {
             lca = gcm::find_anti_dep(lca, (NodeLoad*)n, early, late);
+        }
 
         // Walk up from the LCA to the early, looking for best place. 
         // Effectively, try to minimize the execution frequency.
         CFGNode* best = lca;
-        // TODO why call idom here?? wouldn't it schedule 1 block higher than we found to be the lowest, but still possible?
-        lca = lca->idom(); // Already found best for starting LCA
-        for(; lca != early->idom(); lca = lca->idom())
-            if(gcm::better(lca, best)) best = lca;
+        for(CFGNode* test = lca->idom(); test != early->idom(); test = test->idom()) {
+            // if(n->uid == watch_uid) {
+            //     std::cout << "---- for " << str::from_int(watch_uid) << ", check if " << test->uid << " is better than " << best->uid << std::endl;
+            //     std::cout << "     where loop depth: " << test->loop_depth() << ", " << best->loop_depth() << std::endl;
+            //     std::cout << "     where idom depth: " << test->idepth() << ", " << best->idepth() << std::endl;
+            // }
+
+            if(gcm::better(test, best)) {
+                // if(n->uid == watch_uid) std::cout << "---- for " << str::from_int(watch_uid) << ", " << test->uid << " is better than " << best->uid << std::endl;
+                best = test;
+            }
+        }
         
         assert(best->nt != NodeType::If);
         ns  [n->uid] = n;
@@ -249,6 +271,7 @@ namespace gcm {
             Node* n = work.pop();
             // assert(late[n->uid] == nullptr); // No double visit
             if(late[n->uid] != nullptr) { continue; } // No double visit
+            // std::cout << ">> " << n->uid << std::endl;
             // These we know the late schedule of, and need to set early for loops
             if(n->cfg()) {
                 // we want to get the head of a block we schedule, and n->ctrl() will always get the head when `n` is a tail
@@ -267,6 +290,10 @@ namespace gcm {
                 // this also means 2 loads cannot be input/output to each other
                 if(n->nt == NodeType::Load) {
                     NodeLoad* load = (NodeLoad*)n;
+                    if(late[load->mem()->uid] == nullptr) {
+                        // try schedule the mem input; TODO it's a hack, but hopefully will do for now
+                        work.push(load->mem());
+                    }
                     for(Node* memuse : load->mem()->output) {
                         // TODO check if correct because I have no clue rn
                         if(late[memuse->uid] == nullptr &&
@@ -275,6 +302,7 @@ namespace gcm {
                             // Load output indirectly defines memory
                             (memuse->type->ttype == TypeT::Tuple && ((TypeTuple*)memuse->type)->val[load->mem_alias]->ttype == TypeT::Mem)) // TODO wtf
                         ) {
+                            // if(n->uid == watch_uid) { std::cout << "---- for watched load uid, node " << memuse->uid << " is not ready" << std::endl; }
                             goto continue_outer;
                         }
                     }
@@ -284,15 +312,23 @@ namespace gcm {
                 gcm::schedule_node_late(n,ns,late);
             }
 
+            // if(n->uid == watch_uid) { std::cout << "---- the watched uid has had the late populated" << std::endl; }
+
             // Walk all inputs and put on worklist, as all of their outputs might now be done
             for(Node* input : n->input) {
+                // if(input == watch) { std::cout << "---- encounter the watched node when looking at inputs of " << n->uid << std::endl; }
                 assert(input != nullptr); // should've been scheduled in `early`, and no other inputs may be nullptr (for now at least)
                 if(late[input->uid] == nullptr) { // i'm assuming it's only needed because of load edges that we check in both directions
                     work.push(input);
+                    // if(n->uid == watch_uid) { std::cout << "---- for the watched uid, input uid " << input->uid << " is put on a work queue" << std::endl; }
                     // if the input has a load output, maybe the load can fire
-                    for(Node* load : input->output)
-                        if(load->nt == NodeType::Load && late[load->uid] == nullptr)
+                    for(Node* load : input->output) {
+                        // if(load == watch) { std::cout << "---- encounter the watched node when looking at outputs of " << input->uid << " but only schedule if it's a load (" << (n->nt == NodeType::Load) << ")" << std::endl; }
+                        if(load->nt == NodeType::Load && late[load->uid] == nullptr) {
+                            // std::cout << "From " << n->uid << "'s outputs, queue " << input->uid << "(is a load)" << std::endl;
                             work.push(load);
+                        }
+                    }
                 }
             }
                 

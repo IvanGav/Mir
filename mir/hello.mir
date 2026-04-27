@@ -17,6 +17,7 @@ return i + 10 + arr[1];
 
 
 
+##
 let arr: i64[10];
 
 let i: i64 = 5;
@@ -31,3 +32,28 @@ while(arg < 10) {
 arr[0] = 10;
 
 return i + arr[0];
+##
+
+
+
+##
+let i: i64 = 5;
+
+while(i < 10) {
+    i = i + (arg + 2);
+};
+
+return i;
+##
+
+
+
+let arr: i64[20];
+let i: i64 = 5;
+
+while(i < 10) {
+    i = i + (arg + 2);
+    arr[i] = arg + 2;
+};
+
+return arr[i];
