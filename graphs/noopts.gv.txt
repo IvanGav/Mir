@@ -1,0 +1,84 @@
+digraph noopts {
+    rankdir=TB;
+    ordering=in;
+
+    // Default node style
+    node [shape=ellipse];
+
+    // CFG-style nodes
+    2  [label="stop",   shape=box, style=filled, fillcolor=lightblue];
+    21 [label="return", shape=box, style=filled, fillcolor=lightblue];
+    18 [label="region", shape=box, style=filled, fillcolor=lightblue];
+
+    10 [label="if",     shape=diamond, style=filled, fillcolor=lightblue];
+    1  [label="main",  shape=box,     style=filled, fillcolor=lightblue];
+
+    // Regular nodes
+    20 [label="+"];
+    19 [label="φ(i)"];
+    9  [label="<"];
+    16 [label="+"];
+    14 [label="+", style=filled, fillcolor=lightgreen];
+    17 [label="+", style=filled, fillcolor=lightgreen];
+
+    7  [label="1", style=filled, fillcolor="#eea4a4"];
+    8  [label="9"];
+    15 [label="10", style=filled, fillcolor="#eea4a4"];
+
+    // --- IF + projections ---
+    subgraph cluster_if {
+        label="";
+        style=invis;
+
+        11 [label="true"];
+        12 [label="false"];
+
+        { rank=same; 11; 12; }
+    }
+
+    5 [label="arg"];
+
+    // --- Pull parents just above projections ---
+    10 -> 11 [style=invis, weight=10];
+    10 -> 12 [style=invis, weight=10];
+
+    1  -> 5  [style=invis, weight=10];
+
+    // Optional left-right nudges for more stable operand placement
+    5  -> 8  [style=invis, weight=5];
+
+    // Edges
+    21 -> 2 [style=dotted];
+    18 -> 21 [style=dotted];
+    20 -> 21;
+
+    19 -> 20 [label="lhs"];
+    5  -> 20 [label="rhs"];
+
+    18 -> 19 [style=dotted];
+    16 -> 19;
+    17 -> 19;
+
+    11 -> 18 [style=dotted];
+    12 -> 18 [style=dotted];
+
+    10 -> 11 [style=dotted];
+    10 -> 12 [style=dotted];
+
+    1  -> 10 [style=dotted];
+    9  -> 10;
+
+    5  -> 9 [label="lhs"];
+    8  -> 9 [label="rhs"];
+
+    14 -> 16 [label="lhs"];
+    15 -> 16 [label="rhs"];
+
+    7  -> 14 [label="lhs"];
+    5  -> 14 [label="rhs", color="#008f00"];
+
+    7  -> 17 [label="lhs"];
+    5  -> 17 [label="rhs", color="#008f00"];
+
+    1  -> 5;
+}

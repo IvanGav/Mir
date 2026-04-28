@@ -1,17 +1,58 @@
-#let t: u64 = 0;
-#if (arg) {
-#    t = arg;
-#    arg = arg + 1;
-#    t = t + arg;
-#};
-#return t;
+##
+let arr: i64[10];
+arr[0] = 1;
+let i: i64 = 5;
+if(arg < 10) {
+    arr[arg] = 10;
+} else {
+    i = arr[0];
+};
+arr[1] = 10;
+return i + 10 + arr[1];
+##
 
-arg=arg+arg;
-arg=arg+arg;
-arg=arg+arg;
-arg=arg+arg;
-arg=arg+arg;
-arg=arg+arg;
-arg=3*arg;
-arg=arg+arg;
-return arg;
+
+
+##
+let arr: i64[10];
+let i: i64 = 5;
+while(arg < 10) {
+    i = arg; # TODO investigate what the heck is happening here
+    arr[arg] = arg;
+    arg = arg + arr[arg];
+    i = i + arg;
+};
+arr[0] = 10;
+return i + arr[0];
+##
+
+
+
+##
+let i: i64 = 5;
+while(i < 10) {
+    i = i + (arg + 2);
+};
+return i;
+##
+
+
+##
+let i: i64;
+let b: i64;
+while(arg < 10) {
+    arg = arg + 1;
+    i = i + arg;
+    b = 10;
+};
+return b;
+##
+
+
+let arr: i64[20];
+let i: i64 = 5;
+while(i < 10) {
+    i = i + (arg + 2);
+    arr[i] = arg + 2;
+};
+return arr[i];

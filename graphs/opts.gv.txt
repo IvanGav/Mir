@@ -1,0 +1,75 @@
+digraph opts {
+    rankdir=TB;
+    ordering=in;
+
+    // Default node style
+    node [shape=ellipse];
+
+    // CFG-style nodes
+    2  [label="stop",   shape=box, style=filled, fillcolor=lightblue];
+    31 [label="return", shape=box, style=filled, fillcolor=lightblue];
+    21 [label="region", shape=box, style=filled, fillcolor=lightblue];
+
+    10 [label="if", shape=diamond, style=filled, fillcolor=lightblue];
+    1  [label="main", shape=box, style=filled, fillcolor=lightblue];
+
+    // Regular nodes
+    30 [label="+"];
+    24 [label="φ(i)"];
+    9  [label="<"];
+    29 [label="*", style=filled, fillcolor=lightgreen];
+
+    7  [label="1"];
+    8  [label="9"];
+    18 [label="11", style=filled, fillcolor="#eea4a4"];
+    28 [label="2"];
+
+    // --- IF + projections ---
+    subgraph cluster_if {
+        label="";
+        style=invis;
+
+        11 [label="true"];
+        12 [label="false"];
+
+        { rank=same; 11; 12; }
+    }
+
+    5 [label="arg"];
+
+    // --- Pull parents just above projections ---
+    10 -> 11 [style=invis, weight=10];
+    10 -> 12 [style=invis, weight=10];
+
+    1  -> 5  [style=invis, weight=10];
+
+    // Edges
+    31 -> 2 [style=dotted];
+    21 -> 31 [style=dotted];
+    30 -> 31;
+
+    24 -> 30 [label="lhs"];
+    29 -> 30 [label="rhs"];
+
+    21 -> 24 [style=dotted];
+    18 -> 24;
+    7  -> 24;
+
+    11 -> 21 [style=dotted];
+    12 -> 21 [style=dotted];
+
+    10 -> 11 [style=dotted];
+    10 -> 12 [style=dotted];
+
+    1  -> 10 [style=dotted];
+    9  -> 10;
+
+    5 -> 8 [style=invis, weight=5];
+    5  -> 9 [label="lhs"];
+    8  -> 9 [label="rhs"];
+
+    5  -> 29 [label="lhs", color="#008f00"];
+    28 -> 29 [label="rhs", color="#008f00"];
+
+    1  -> 5;
+}
