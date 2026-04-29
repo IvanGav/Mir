@@ -43,7 +43,54 @@ enum class NodeType {
     BinOp,
     UnOp,
     Phi, Proj,
-    Load, Store, AllocA
+    Load, Store, AllocA,
+
+    // x86; I'm sorry that they're here.. I just don't have the time to come up with a neater solution
+    // R/I/M = Register/Immidiate/Memory
+    
+    // Jump; Control!!!!
+    x86Jump,
+    x86JumpZero, 
+    x86JumpNZero,
+    x86JumpOne, 
+    x86JumpNOne,
+    x86JumpEq, 
+    x86JumpNEq, 
+    x86JumpG, 
+    x86JumpGEq, 
+    x86JumpL, 
+    x86JumpLEq,
+
+    // Arithmetic
+    x86AddR,
+    x86AddI,
+    x86AddM,
+    x86SubR,
+    x86SubI,
+    x86SubM,
+    x86MulR,
+    x86MulI,
+    x86MulM,
+    x86DivR,
+    x86DivM,
+
+    // Compare
+    x86CmpRR,
+    x86CmpRI,
+    x86CmpRM,
+    x86CmpMI,
+
+    // Stack
+    x86Push, 
+    x86Pop,
+
+    // Memory
+    x86Lea,
+
+    // Other
+    x86MovR, 
+    x86MovM, 
+    x86MovI,
 };
 
 // Assume that *every* node is reachable from Start by *only* using `output` edges and from Stop by *only* using `input` edges
@@ -166,6 +213,10 @@ struct Node {
     //     Node::gvn.insert(this);
     //     locked = true;
     // }
+
+    Op op() {
+        todo;
+    }
 
     /* idom related functions */
 
