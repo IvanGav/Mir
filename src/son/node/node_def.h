@@ -27,6 +27,9 @@ namespace node {
     CFGNode* get_cfg_ctrl(CFGNode* n, u32 i);
     u32 ctrl_size(CFGNode* n);
     Op op(Node* n);
+    bool is_load(Node* n);
+    Node* mem_of_load(Node* n);
+    u32 mem_alias_of_load(Node* n);
 };
 
 enum class NodeType {
@@ -263,6 +266,9 @@ struct Node {
     Node* idealize() { return node::idealize(this); }
     Node* peephole() { return node::peephole(this); }
     bool pinned() { return node::pinned(this); }
+    bool is_load() { return node::is_load(this); }
+    Node* mem() { return node::mem_of_load(this); }
+    u32 mem_alias() { return node::mem_alias_of_load(this); }
 
     /* including ctrl getters and setters */
     

@@ -646,6 +646,10 @@ struct x86NodeOpM {
         nptr->type = op->type;
         return nptr;
     }
+
+    CFGNode* ctrl() { return self.input[0]; }
+    Node* size() { todo; }
+    Node* mem() { todo; }
 };
 
 struct x86NodeMov {

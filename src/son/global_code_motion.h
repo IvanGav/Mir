@@ -106,7 +106,10 @@ namespace gcm {
     //     }
     //     return load_lca; // don't intersect
     // }
-    CFGNode* anti_dep(NodeLoad* load, CFGNode* store_block, CFGNode* def_block, Node* lca, Node* store) {
+
+    // just a clarification, disregard ^^^ for now; I'm not 100% sure that function works and I don't have time to understand *exactly* how vvv works.
+    CFGNode* anti_dep(Node* load, CFGNode* store_block, CFGNode* def_block, Node* lca, Node* store) {
+        assert(load->is_load());
         // Walk store blocks "reach" from its scheduled location to its earliest (inclusive)
         for(; store_block != def_block->idom(); store_block = store_block->idom()) {
             // Store and Load overlap, need anti-dependence
@@ -116,15 +119,16 @@ namespace gcm {
                 if(
                     store != nullptr && // if we have an explicit store
                     lca == store_block && // and scheduling `load` in the same block as `store`
-                    !store->input.contains((Node*)load) // and it's already not an anti-dep
-                ) store->push_input((Node*)load); // Add anti-dep as well (aka load must finish before store)
+                    !store->input.contains(load) // and it's already not an anti-dep
+                ) store->push_input(load); // Add anti-dep as well (aka load must finish before store)
                 return lca; // Cap this store's anti-dep to here
             }
         }
         return lca;
     }
 
-    CFGNode* find_anti_dep(CFGNode* lca, NodeLoad* load, CFGNode* early, CFGNode** late) {
+    CFGNode* find_anti_dep(CFGNode* lca, Node* load, CFGNode* early, CFGNode** late) {
+        assert(load->is_load());
         // Walk load->mem outputs, looking for Stores causing an anti-dep
         for(Node* mem : load->mem()->output) {
             switch(mem->nt) {
@@ -144,51 +148,18 @@ namespace gcm {
                     }
                     break;
                 }
-                case NodeType::Load: // Loads do not cause anti-deps on other loads
                 case NodeType::Ret: // Load must already be ahead of Return
                 case NodeType::Region:
                     break;
                 case NodeType::Scope: panic; // Mem uses now on ScopeMin (What the heck is ScopeMin)
-                default: panic; // no other node should be consuming `mem` (have a mem edge input)
+                default: {
+                    if(mem->is_load()) break; // Loads do not cause anti-deps on other loads
+                    panic; // no other node should be consuming `mem` (have a mem edge input)
+                }
             }
         }
         return lca;
     }
-    // CFGNode* find_anti_dep(CFGNode* lca, NodeLoad* load, CFGNode* early, CFGNode** late) {
-    //     // TODO might be more efficient to manually zero out at the end of the function by walking instead of memsetting?
-    //     gcm::anti_deps.clear(); // this info is stored per node (and thus reset before looking at each node)
-    //     // Walk LCA->early, flagging Load's block location choices
-    //     for(CFGNode* cfg = lca; early != nullptr && cfg != early->idom(); cfg = cfg->idom())
-    //         gcm::anti_deps.set(cfg->cfgid); // cfg->anti = load->self.uid;
-    //     // Walk load->mem outputs, looking for Stores causing an anti-dep
-    //     for(Node* mem : load->mem()->output) {
-    //         switch(mem->nt) {
-    //             case NodeType::Store:
-    //             case NodeType::AllocA: {
-    //                 assert(late[mem->uid] != nullptr);
-    //                 lca = anti_dep(load, late[mem->uid], mem->ctrl(), lca, mem);
-    //                 break;
-    //             }
-    //             case NodeType::Phi: {
-    //                 // Repeat anti-dep for matching Phi inputs. No anti-dep edges but may raise the LCA.
-    //                 for(u32 i = 1; i < mem->input.size; i++) {
-    //                     if(mem->input[i] == mem) {
-    //                         // note that `mem->ctrl()->ctrl(i)` means "get ctrl path of phi's region that corresponds to the `mem`"
-    //                         lca = anti_dep(load, mem->ctrl()->ctrl(i), load->mem()->ctrl(), lca, nullptr);
-    //                     }
-    //                 }
-    //                 break;
-    //             }
-    //             case NodeType::Load: // Loads do not cause anti-deps on other loads
-    //             case NodeType::Ret: // Load must already be ahead of Return
-    //             case NodeType::Region:
-    //                 break;
-    //             case NodeType::Scope: panic; // Mem uses now on ScopeMin (What the heck is ScopeMin)
-    //             default: panic; // no other node should be consuming `mem` (have a mem edge input)
-    //         }
-    //     }
-    //     return lca;
-    // }
     
     // CFG block (aka ctrl) of `output`. Normally from `late`, except for Phis, which go to the matching Region input.
     Node* cfg_block_of(Node* n, Node* output, Node** late) {
@@ -236,8 +207,8 @@ namespace gcm {
         // if(n->uid == watch_uid) std::cout << "---- lca of " << str::from_int(watch_uid) << " = " << lca->uid << std::endl;
 
         // Loads may need anti-dependencies, raising their LCA
-        if(n->nt == NodeType::Load) {
-            lca = gcm::find_anti_dep(lca, (NodeLoad*)n, early, late);
+        if(n->is_load()) {
+            lca = gcm::find_anti_dep(lca, n, early, late);
         }
 
         // Walk up from the LCA to the early, looking for best place. 
@@ -288,8 +259,8 @@ namespace gcm {
 
                 // Loads need their memory inputs' uses also done
                 // this also means 2 loads cannot be input/output to each other
-                if(n->nt == NodeType::Load) {
-                    NodeLoad* load = (NodeLoad*)n;
+                if(n->is_load()) {
+                    Node* load = n;
                     if(late[load->mem()->uid] == nullptr) {
                         // try schedule the mem input; TODO it's a hack, but hopefully will do for now
                         work.push(load->mem());
@@ -300,7 +271,7 @@ namespace gcm {
                             // Load output directly defines memory
                             (memuse->type->ttype == TypeT::Mem ||
                             // Load output indirectly defines memory
-                            (memuse->type->ttype == TypeT::Tuple && ((TypeTuple*)memuse->type)->val[load->mem_alias]->ttype == TypeT::Mem)) // TODO wtf
+                            (memuse->type->ttype == TypeT::Tuple && ((TypeTuple*)memuse->type)->val[load->mem_alias()]->ttype == TypeT::Mem)) // TODO wtf
                         ) {
                             // if(n->uid == watch_uid) { std::cout << "---- for watched load uid, node " << memuse->uid << " is not ready" << std::endl; }
                             goto continue_outer;
@@ -312,20 +283,14 @@ namespace gcm {
                 gcm::schedule_node_late(n,ns,late);
             }
 
-            // if(n->uid == watch_uid) { std::cout << "---- the watched uid has had the late populated" << std::endl; }
-
             // Walk all inputs and put on worklist, as all of their outputs might now be done
             for(Node* input : n->input) {
-                // if(input == watch) { std::cout << "---- encounter the watched node when looking at inputs of " << n->uid << std::endl; }
                 assert(input != nullptr); // should've been scheduled in `early`, and no other inputs may be nullptr (for now at least)
                 if(late[input->uid] == nullptr) { // i'm assuming it's only needed because of load edges that we check in both directions
                     work.push(input);
-                    // if(n->uid == watch_uid) { std::cout << "---- for the watched uid, input uid " << input->uid << " is put on a work queue" << std::endl; }
                     // if the input has a load output, maybe the load can fire
                     for(Node* load : input->output) {
-                        // if(load == watch) { std::cout << "---- encounter the watched node when looking at outputs of " << input->uid << " but only schedule if it's a load (" << (n->nt == NodeType::Load) << ")" << std::endl; }
-                        if(load->nt == NodeType::Load && late[load->uid] == nullptr) {
-                            // std::cout << "From " << n->uid << "'s outputs, queue " << input->uid << "(is a load)" << std::endl;
+                        if(load->is_load() && late[load->uid] == nullptr) {
                             work.push(load);
                         }
                     }
