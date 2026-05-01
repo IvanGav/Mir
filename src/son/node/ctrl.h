@@ -43,6 +43,8 @@ namespace node {
                 assert(i == 0);
                 return node->ctrl();
             }
+
+            case NodeType::x86Jump: return n->input[0]; // effectively same as `if`; heresy, but i don't care
             default: unreachable;
         }
         unreachable;
@@ -67,6 +69,8 @@ namespace node {
                 NodeRegion* node = (NodeRegion*) n;
                 return node->ctrl_size();
             }
+
+            case NodeType::x86Jump: return 1; // effectively same as `if`
             default: unreachable;
         }
         unreachable;

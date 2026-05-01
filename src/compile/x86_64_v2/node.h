@@ -22,14 +22,15 @@ namespace x86 {
             i64 imm = ((TypeInt*)(((NodeConst*)(rhs))->val))->val();
             if(sizeofival(imm) == sizeof(i64)) {
                 // if can't fit in 32 bits - have to Mov and then Add 2 registers
-                todo; // return x86NodeR::create(NodeType::x86AddR, ...);
+                return x86NodeOpR::create(add);
             }
+            // TODO maybe add these 2 later
             // imm can fit in 32 bits
-            if(lhs->nt == NodeType::BinOp && lhs->op() == Op::Add) {
-                // (base + (idx << scale)) + off
-                NodeBinOp* ladd = (NodeBinOp*)lhs;
-                return try_make_lea(add, ladd->lhs(), ladd->rhs(), (i32)imm);
-            }
+            // if(lhs->nt == NodeType::BinOp && lhs->op() == Op::Add) {
+            //     // (base + (idx << scale)) + off
+            //     NodeBinOp* ladd = (NodeBinOp*)lhs;
+            //     return try_make_lea(add, ladd->lhs(), ladd->rhs(), (i32)imm);
+            // }
             // TODO add the shift operators
             // if(lhs->nt == NodeType::BinOp && lhs->op() == Op::Shl) {
             //     // (idx << scale) + off
@@ -37,7 +38,7 @@ namespace x86 {
             //     return try_make_lea(add, nullptr, lshl->rhs(), (i32)imm);
             // }
 
-            todo; // return x86NodeI::create(NodeType::x86AddI, ...);
+            return x86NodeOpI::create(add);
         }
         return try_make_lea(add, lhs, rhs, 0);
     }

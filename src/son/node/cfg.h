@@ -15,6 +15,9 @@ namespace node {
             case NodeType::CtrlProj:
                 return true;
             
+            case NodeType::x86Jump: // equivalent to `if`
+                return true;
+            
             default:
                 return false;
         }
@@ -34,9 +37,52 @@ namespace node {
             case NodeType::Ret:
             case NodeType::If:
                 return false;
+
+            case NodeType::x86Jump: // equivalent to `if`
+                return false;
             
             default: unreachable;
         }
         unreachable;
     }
+
+    bool is_ideal(Node* n) {
+        todo;
+        switch(n->nt) {
+            default: return false;
+        }
+    }
+
+    bool is_store(Node* n) {
+        switch(n->nt) {
+            case NodeType::Load: return true;
+
+            case NodeType::x86Load:
+            case NodeType::x86AddM:
+            case NodeType::x86SubM:
+            case NodeType::x86MulM:
+            case NodeType::x86DivM:
+            case NodeType::x86CmpM:
+            case NodeType::x86Pop:
+            case NodeType::x86Lea:
+                return true;
+
+            default: return false;
+        }
+    }
+
+    Op op(Node* n) {
+        switch(n->nt) {
+            case NodeType::BinOp: {
+                NodeBinOp* node = (NodeBinOp*) n;
+                return node->op;
+            }
+            case NodeType::UnOp: {
+                NodeUnOp* node = (NodeUnOp*) n;
+                return node->op;
+            }
+            default: panic;
+        }
+    }
+
 }

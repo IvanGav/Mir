@@ -579,3 +579,123 @@ struct NodeScope {
         }
     }
 };
+
+// ________________- x86 nodes -__________________
+// Instead of adding inputs normally, they do `this->input.push(...)`.
+// Sometimes include x86 nodes, sometimes include ideal nodes as inputs. Most ideal 
+// nodes that are not ctrl should actually be exchanged for x86 nodes later.
+// It's assumed that the caller (aka ideal->x86 translator) will later link them manually.
+
+// operator that takes in 2 registers
+struct x86NodeOpR {
+    // self.input = [ctrl, lhs, rhs]
+    Node self;
+
+    // Constructors
+    // given a well formed BinOp node, inherit its inputs and other properties; when given a logical binop, make a Cmp op
+    static Node* create(Node* op) {
+        assert(op->nt == NodeType::BinOp);
+        x86NodeOpR self = { Node::create(node::x86_op_r(op->op())) };
+        Node* nptr = (Node*) Node::node_arena->push(self);
+        nptr->copy_inputs(op); // will copy [ctrl, lhs, rhs]
+        nptr->type = op->type;
+        return nptr;
+    }
+};
+
+// operator that takes in a register and an immidiate
+struct x86NodeOpI {
+    // self.input = [ctrl, lhs]
+    Node self;
+    i32 imm;
+
+    // Constructors
+    // given a well formed BinOp node, inherit its inputs and other properties; when given a logical binop, make a Cmp op
+    static Node* create(Node* op) {
+        assert(op->nt == NodeType::BinOp);
+        NodeBinOp* binop = (NodeBinOp*)op;
+        assert(binop->rhs()->nt == NodeType::Const);
+        x86NodeOpI self = { .self = Node::create(node::x86_op_i(binop->op)), .imm = ((TypeInt*)((NodeConst*)binop->rhs())->val)->val() };
+        Node* nptr = (Node*) Node::node_arena->push(self);
+        nptr->copy_inputs(op); // will copy [ctrl, lhs, rhs]
+        nptr->pop_input(); // will pop rhs since it's a const that's been recorded as self.imm
+        nptr->type = op->type;
+        return nptr;
+    }
+};
+
+// operator that takes in a register and memory
+// [ptr + index << scale + off]
+struct x86NodeOpM {
+    // self.input = [ctrl, lhs]
+    Node self;
+    i32 off;
+    u8 scale;
+
+    // Constructors
+    // given a well formed BinOp node, inherit its inputs and other properties; when given a logical binop, make a Cmp op
+    static Node* create(Node* op) {
+        todo;
+        assert(op->nt == NodeType::BinOp);
+        NodeBinOp* binop = (NodeBinOp*)op;
+        assert(binop->rhs()->nt == NodeType::Const);
+        x86NodeOpM self = { .self = Node::create(node::x86_op_m(binop->op)) };
+        Node* nptr = (Node*) Node::node_arena->push(self);
+        nptr->copy_inputs(op); // will copy [ctrl, lhs, rhs]
+        nptr->pop_input(); // will pop rhs since it's a const that's been recorded as self.imm
+        nptr->type = op->type;
+        return nptr;
+    }
+};
+
+struct x86NodeMov {
+    // self.input = [ctrl]
+    Node self;
+    i64 imm;
+
+    // Constructors
+    // move immidiate up to 64 bit
+    static Node* imm(NodeConst* imm) {
+        assert(imm->self.nt == NodeType::Const);
+        assert(imm->self.type->ttype == TypeT::Int);
+        x86NodeMov self = { .self = Node::create(NodeType::x86MovI), .imm = ((TypeInt*)(imm)->val)->val() };
+        Node* nptr = (Node*) Node::node_arena->push(self);
+        nptr->copy_inputs((Node*)imm); // will copy [ctrl]
+        nptr->type = imm->self.type;
+        return nptr;
+    }
+};
+
+// Conditional jump
+struct x86NodeJmp {
+    // self.input = [ctrl, cond]
+    Node self;
+    NodeType op; // jump on what operation; will be `NodeType::x86SetXXX` if `cond` is `x86CmpX` or `NodeType::Undefined` if `cond` is a `x86SetXXX` by itself
+
+    // Constructors
+    static Node* create(NodeIf* n) {
+        assert(n->self.nt == NodeType::If);
+        x86NodeJmp self = { .self = Node::create(NodeType::x86Jump) };
+        Node* nptr = (Node*) Node::node_arena->push(self);
+        nptr->copy_inputs((Node*)n); // will copy [ctrl, cond]
+        nptr->type = n->self.type;
+        return nptr;
+    }
+};
+
+// Use the output of a comparison without a jump
+struct x86NodeSet {
+    // self.input = [ctrl, cmp]
+    Node self;
+
+    // Constructors
+    static Node* create(Node* cmp, NodeBinOp* op) {
+        assert(cmp->nt == NodeType::x86CmpR || cmp->nt == NodeType::x86CmpI || cmp->nt == NodeType::x86CmpM);// || cmp->nt == NodeType::x86CmpMI);
+        x86NodeSet self = { .self = Node::create(node::x86_set_op(op->op)) };
+        Node* nptr = (Node*) Node::node_arena->push(self);
+        nptr->input.push(op->ctrl());
+        nptr->input.push(cmp);
+        nptr->type = cmp->type; // TODO maybe `op` instead?
+        return nptr;
+    }
+};
