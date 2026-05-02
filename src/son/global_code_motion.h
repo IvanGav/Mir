@@ -18,22 +18,16 @@ namespace gcm {
     // if we already scheduled a store, we still need to know where it *could have* been, because if the load never looks through a branch that the store is in, it will never know that the store even happend; though why not go until load's early block instad?
     // "Do we always know the load must go before the store" - yes.. we walk over all stores that *overwrite* the qequired memory (aka the stores that take in needed memory and write to it)
 
-    // u32 watch_uid = 24; //28; //33;
-    // Node* watch = nullptr;
-
     // Assume no infinite loops
     void build(NodeStart* start, NodeStop* stop) {
         gcm::schedule_early(start);
-        // if(watch != nullptr) std::cout << "---- early of " << str::from_int(watch_uid) << " = " << watch->ctrl()->uid << std::endl;
         gcm::schedule_late(stop);
-        // if(watch != nullptr) std::cout << "---- late of " << str::from_int(watch_uid) << " = " << watch->ctrl()->uid << std::endl;
     }
 
     /* schedule early */
 
     // given a non-cfg node, schedule it as early as possible
     void schedule_node_early(Node* n, BitSet& visit) {
-        // if(n->uid == watch_uid) watch = n;
         if(n == nullptr || n->cfg() || visit[n->uid]) return;
         visit.set(n->uid);
 
@@ -204,8 +198,6 @@ namespace gcm {
             lca = node::idom(gcm::cfg_block_of(n, output, late), lca);
         }
 
-        // if(n->uid == watch_uid) std::cout << "---- lca of " << str::from_int(watch_uid) << " = " << lca->uid << std::endl;
-
         // Loads may need anti-dependencies, raising their LCA
         if(n->is_load()) {
             lca = gcm::find_anti_dep(lca, n, early, late);
@@ -215,14 +207,7 @@ namespace gcm {
         // Effectively, try to minimize the execution frequency.
         CFGNode* best = lca;
         for(CFGNode* test = lca->idom(); test != early->idom(); test = test->idom()) {
-            // if(n->uid == watch_uid) {
-            //     std::cout << "---- for " << str::from_int(watch_uid) << ", check if " << test->uid << " is better than " << best->uid << std::endl;
-            //     std::cout << "     where loop depth: " << test->loop_depth() << ", " << best->loop_depth() << std::endl;
-            //     std::cout << "     where idom depth: " << test->idepth() << ", " << best->idepth() << std::endl;
-            // }
-
             if(gcm::better(test, best)) {
-                // if(n->uid == watch_uid) std::cout << "---- for " << str::from_int(watch_uid) << ", " << test->uid << " is better than " << best->uid << std::endl;
                 best = test;
             }
         }
@@ -273,7 +258,6 @@ namespace gcm {
                             // Load output indirectly defines memory
                             (memuse->type->ttype == TypeT::Tuple && ((TypeTuple*)memuse->type)->val[load->mem_alias()]->ttype == TypeT::Mem)) // TODO wtf
                         ) {
-                            // if(n->uid == watch_uid) { std::cout << "---- for watched load uid, node " << memuse->uid << " is not ready" << std::endl; }
                             goto continue_outer;
                         }
                     }
