@@ -3,10 +3,13 @@
 #include "../../core/prelude.h"
 #include "../../core/str.h"
 
+// Registers for x86 64 v2. No float support in my version for now.
+
 // I think: rax, rcx, rdx, rsi, rdi, r8–r11 are caller saved, rbx, rbp, r12–r15 are callee saved, rdi, rsi, rdx, rcx, r8, r9 function args, rax function return value
 // None of this matters for me rn, since I don't even have functions
 
 enum Reg : u16 {
+    UNDEFINED = U16_MAX,
     RAX = 0, // A = accumulator
     RBX = 1, // B = base
     RCX = 2, // C = counter
@@ -45,11 +48,24 @@ enum Reg : u16 {
 Str regname[16] {"RAX"_s,"RBX"_s,"RCX"_s,"RDX"_s,"RSI"_s,"RDI"_s,"RSP"_s,"RBP"_s,"R08"_s,"R09"_s,"R10"_s,"R11"_s,"R12"_s,"R13"_s,"R14"_s,"R15"_s};
 
 struct RegMask {
-    u16 regs;
+    u64 regs; // additional 48 bits are for spills and stuff
+
+    // set bit count
+    u8 size() { todo; }
+    bool size1() { return (regs & -regs) == regs; }
+    RegMask operator&(RegMask const& other) const {
+        return RegMask { .regs = u64(this->regs & other.regs) };
+    }
+    RegMask operator-(RegMask const& other) const {
+        return RegMask { .regs = u64(this->regs & ~other.regs) };
+    }
+    RegMask operator-(u8 reg) const {
+        return RegMask { .regs = u64(this->regs & ~(1 << reg)) };
+    }
 };
 
 RegMask RMASK = RegMask { U16_MAX }; // can read from any register
-RegMask WMASK = RegMask { u16(RMASK.regs ^ bRSP) }; // cannot write to stack pointer
+RegMask WMASK = RegMask { u64(RMASK.regs ^ bRSP) }; // cannot write to stack pointer
 
 
 

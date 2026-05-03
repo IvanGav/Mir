@@ -152,4 +152,11 @@ struct HMap {
         cloned.map = map.clone(new_arena);
         return cloned;
     }
+
+    Entry* begin() {
+        return map.begin();
+    }
+    Entry* end() {
+        return map.end();
+    }
 };

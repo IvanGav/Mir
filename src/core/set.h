@@ -161,4 +161,59 @@ struct HSet {
         assert(cloned.arena != nullptr);
         return cloned;
     }
+
+    /* STL Compatibility */
+
+    // TODO this was coded by ChatGPT; I just glanced over it
+    struct Iterator {
+        HSet* hset;
+        u32 index;
+
+        Iterator(HSet* hset, u32 index)
+            : hset(hset), index(index) {
+            skip_to_valid();
+        }
+
+        void skip_to_valid() {
+            while (index < hset->size && !hset->exists.has(index)) {
+                ++index;
+            }
+        }
+
+        T& operator*() {
+            return hset->set[index];
+        }
+
+        T* operator->() {
+            return &hset->set[index];
+        }
+
+        Iterator& operator++() {
+            ++index;
+            skip_to_valid();
+            return *this;
+        }
+
+        Iterator operator++(int) {
+            Iterator old = *this;
+            ++(*this);
+            return old;
+        }
+
+        bool operator==(const Iterator& other) const {
+            return hset == other.hset && index == other.index;
+        }
+
+        bool operator!=(const Iterator& other) const {
+            return !(*this == other);
+        }
+    };
+
+    Iterator begin() {
+        return Iterator(this, 0);
+    }
+
+    Iterator end() {
+        return Iterator(this, size);
+    }
 };

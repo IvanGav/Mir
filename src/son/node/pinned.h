@@ -36,10 +36,6 @@ namespace node {
             case NodeType::Undefined:
                 printe("call pinned on undefined node", n);
                 panic;
-            
-
-            case NodeType::x86Jump: // effectively the same as `if`
-                return true;
         }
         unreachable;
     }

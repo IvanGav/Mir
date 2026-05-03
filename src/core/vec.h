@@ -141,7 +141,7 @@ struct Vec {
         size = 0;
     }
 
-    // Remove an element at a given index
+    // Remove an element at a given index. Order preserving, O(n).
     void remove(usize remove_index) {
         assert(remove_index < size);
         size--;
@@ -150,7 +150,14 @@ struct Vec {
         }
     }
 
-    // Remove a single element by value. Return true if something was deleted.
+    // Remove an element at a given index. Does not preserve order, but O(1).
+    void remove_swap(usize remove_index) {
+        assert(remove_index < size);
+        size--;
+        data[remove_index] = data[size];
+    }
+
+    // Remove a single element by value. Return true if something was deleted. Order preserving, O(n).
     bool remove_first_of(T const& e) {
         usize i = this->index_of(e);
         if(i == size) return false;
@@ -158,11 +165,27 @@ struct Vec {
         return true;
     }
 
-    // Remove a single element by value. Return true if something was deleted.
+    // Remove a single element by value. Return true if something was deleted. Does not preserve order, but O(1).
+    bool remove_swap_first_of(T const& e) {
+        usize i = this->index_of(e);
+        if(i == size) return false;
+        this->remove_swap(i);
+        return true;
+    }
+
+    // Remove a single element by value. Return true if something was deleted. Order preserving, O(n).
     bool remove_first_of(T const&& e) {
         usize i = this->index_of(e);
         if(i == size) return false;
         this->remove(i);
+        return true;
+    }
+
+    // Remove a single element by value. Return true if something was deleted. Does not preserve order, but O(1).
+    bool remove_swap_first_of(T const&& e) {
+        usize i = this->index_of(e);
+        if(i == size) return false;
+        this->remove_swap(i);
         return true;
     }
 

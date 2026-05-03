@@ -103,7 +103,7 @@ namespace gcm {
 
     // just a clarification, disregard ^^^ for now; I'm not 100% sure that function works and I don't have time to understand *exactly* how vvv works.
     CFGNode* anti_dep(Node* load, CFGNode* store_block, CFGNode* def_block, Node* lca, Node* store) {
-        assert(load->is_load());
+        assert(load->nt == NodeType::Load);
         // Walk store blocks "reach" from its scheduled location to its earliest (inclusive)
         for(; store_block != def_block->idom(); store_block = store_block->idom()) {
             // Store and Load overlap, need anti-dependence
@@ -122,9 +122,10 @@ namespace gcm {
     }
 
     CFGNode* find_anti_dep(CFGNode* lca, Node* load, CFGNode* early, CFGNode** late) {
-        assert(load->is_load());
+        assert(load->nt == NodeType::Load);
+        Node* mem = ((NodeLoad*)load)->mem();
         // Walk load->mem outputs, looking for Stores causing an anti-dep
-        for(Node* mem : load->mem()->output) {
+        for(Node* mem : mem->output) {
             switch(mem->nt) {
                 case NodeType::Store:
                 case NodeType::AllocA: {
@@ -137,19 +138,17 @@ namespace gcm {
                     for(u32 i = 1; i < mem->input.size; i++) {
                         if(mem->input[i] == mem) {
                             // note that `mem->ctrl()->ctrl(i)` means "get ctrl path of phi's region that corresponds to the `mem`"
-                            lca = anti_dep(load, mem->ctrl()->ctrl(i), load->mem()->ctrl(), lca, nullptr);
+                            lca = anti_dep(load, mem->ctrl()->ctrl(i), mem->ctrl(), lca, nullptr);
                         }
                     }
                     break;
                 }
+                case NodeType::Load: // Loads do not cause anti-deps on other loads
                 case NodeType::Ret: // Load must already be ahead of Return
                 case NodeType::Region:
                     break;
                 case NodeType::Scope: panic; // Mem uses now on ScopeMin (What the heck is ScopeMin)
-                default: {
-                    if(mem->is_load()) break; // Loads do not cause anti-deps on other loads
-                    panic; // no other node should be consuming `mem` (have a mem edge input)
-                }
+                default: panic; // no other node should be consuming `mem` (have a mem edge input)
             }
         }
         return lca;
@@ -199,7 +198,7 @@ namespace gcm {
         }
 
         // Loads may need anti-dependencies, raising their LCA
-        if(n->is_load()) {
+        if(n->nt == NodeType::Load) {
             lca = gcm::find_anti_dep(lca, n, early, late);
         }
 
@@ -244,8 +243,8 @@ namespace gcm {
 
                 // Loads need their memory inputs' uses also done
                 // this also means 2 loads cannot be input/output to each other
-                if(n->is_load()) {
-                    Node* load = n;
+                if(n->nt == NodeType::Load) {
+                    NodeLoad* load = (NodeLoad*)n;
                     if(late[load->mem()->uid] == nullptr) {
                         // try schedule the mem input; TODO it's a hack, but hopefully will do for now
                         work.push(load->mem());
@@ -256,7 +255,7 @@ namespace gcm {
                             // Load output directly defines memory
                             (memuse->type->ttype == TypeT::Mem ||
                             // Load output indirectly defines memory
-                            (memuse->type->ttype == TypeT::Tuple && ((TypeTuple*)memuse->type)->val[load->mem_alias()]->ttype == TypeT::Mem)) // TODO wtf
+                            (memuse->type->ttype == TypeT::Tuple && ((TypeTuple*)memuse->type)->val[load->mem_alias]->ttype == TypeT::Mem)) // TODO wtf
                         ) {
                             goto continue_outer;
                         }
@@ -274,7 +273,7 @@ namespace gcm {
                     work.push(input);
                     // if the input has a load output, maybe the load can fire
                     for(Node* load : input->output) {
-                        if(load->is_load() && late[load->uid] == nullptr) {
+                        if(load->nt == NodeType::Load && late[load->uid] == nullptr) {
                             work.push(load);
                         }
                     }

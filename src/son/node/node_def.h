@@ -27,14 +27,12 @@ namespace node {
     CFGNode* get_cfg_ctrl(CFGNode* n, u32 i);
     u32 ctrl_size(CFGNode* n);
     Op op(Node* n);
-    bool is_load(Node* n);
-    Node* mem_of_load(Node* n);
-    u32 mem_alias_of_load(Node* n);
 };
 
 enum class NodeType {
     Undefined = 0,
     Scope,
+    Split, // When compiling, sometimes need to split live ranges; really shouldn't be in this "ideal" collection, but oh well
 
     // Control
     Start, Stop, Ret,
@@ -48,62 +46,6 @@ enum class NodeType {
     UnOp,
     Phi, Proj,
     Load, Store, AllocA,
-
-    // x86; I'm sorry that they're here.. I just don't have the time to come up with a neater solution
-    // R/I/M = Register/Immidiate/Memory
-    
-    // Jump; Control!!!!
-    x86Jump, // generic conditional jump; what operation is decided by `this->op`
-    // x86JumpZero, 
-    // x86JumpNZero,
-    // x86JumpOne, 
-    // x86JumpNOne,
-    // x86JumpEq, 
-    // x86JumpNEq, 
-    // x86JumpG, 
-    // x86JumpGEq, 
-    // x86JumpL, 
-    // x86JumpLEq,
-
-    // Set (use result of Cmp)
-    x86SetEq, 
-    x86SetNEq, 
-    x86SetG, 
-    x86SetGEq, 
-    x86SetL, 
-    x86SetLEq, // x86JumpZero, x86JumpNZero, x86JumpOne, x86JumpNOne,
-
-    // Arithmetic
-    x86AddR,
-    x86AddI,
-    x86AddM,
-    x86SubR,
-    x86SubI,
-    x86SubM,
-    x86MulR,
-    x86MulI,
-    x86MulM,
-    x86DivR,
-    x86DivM,
-
-    // Compare
-    x86CmpR,
-    x86CmpI,
-    x86CmpM,
-    // x86CmpMI,
-
-    // Stack
-    x86Push, 
-    x86Pop,
-
-    // Memory
-    x86Lea, // Load Effective Address
-    x86Load,
-    x86Store,
-
-    // Other
-    x86MovR,
-    x86MovI,
 };
 
 // Assume that *every* node is reachable from Start by *only* using `output` edges and from Stop by *only* using `input` edges
@@ -266,9 +208,6 @@ struct Node {
     Node* idealize() { return node::idealize(this); }
     Node* peephole() { return node::peephole(this); }
     bool pinned() { return node::pinned(this); }
-    bool is_load() { return node::is_load(this); }
-    Node* mem() { return node::mem_of_load(this); }
-    u32 mem_alias() { return node::mem_alias_of_load(this); }
 
     /* including ctrl getters and setters */
     
@@ -292,48 +231,4 @@ struct Node {
         this->set_input(0,new_ctrl);
     }
     
-};
-
-namespace node {
-    NodeType x86_op_r(Op op) {
-        switch(op) {
-            case Op::Add: return NodeType::x86AddR;
-            case Op::Sub: return NodeType::x86SubR;
-            case Op::Mul: return NodeType::x86MulR;
-            case Op::Div: return NodeType::x86DivR;
-            case Op::Eq: case Op::Neq: case Op::Greater: case Op::GreaterEq: case Op::Less: case Op::LessEq: return NodeType::x86CmpR;
-            default: todo;
-        }
-    }
-    NodeType x86_op_i(Op op) {
-        switch(op) {
-            case Op::Add: return NodeType::x86AddI;
-            case Op::Sub: return NodeType::x86SubI;
-            case Op::Mul: return NodeType::x86MulI;
-            // case Op::Div: return NodeType::x86DivI;
-            case Op::Eq: case Op::Neq: case Op::Greater: case Op::GreaterEq: case Op::Less: case Op::LessEq: return NodeType::x86CmpI;
-            default: todo;
-        }
-    }
-    NodeType x86_op_m(Op op) {
-        switch(op) {
-            case Op::Add: return NodeType::x86AddM;
-            case Op::Sub: return NodeType::x86SubM;
-            case Op::Mul: return NodeType::x86MulM;
-            case Op::Div: return NodeType::x86DivM;
-            case Op::Eq: case Op::Neq: case Op::Greater: case Op::GreaterEq: case Op::Less: case Op::LessEq: return NodeType::x86CmpM;
-            default: todo;
-        }
-    }
-    NodeType x86_set_op(Op op) {
-        switch(op) {
-            case Op::Eq: NodeType::x86SetEq;
-            case Op::Neq: NodeType::x86SetNEq;
-            case Op::Greater: NodeType::x86SetG;
-            case Op::GreaterEq: NodeType::x86SetGEq;
-            case Op::Less: NodeType::x86SetL;
-            case Op::LessEq: NodeType::x86SetLEq;
-            default: todo;
-        }
-    }
 };
