@@ -53,6 +53,7 @@ struct RegMask {
     // set bit count
     u8 size() { todo; }
     bool size1() { return (regs & -regs) == regs; }
+    bool is_empty() { return regs == 0; }
     RegMask operator&(RegMask const& other) const {
         return RegMask { .regs = u64(this->regs & other.regs) };
     }

@@ -5,6 +5,13 @@
 #include "register.h"
 #include "lrg.h"
 
+namespace reg_alloc {
+    bool build_lrg(RegAlloc* alloc);
+    bool build_ifg(RegAlloc* alloc);
+    bool coalesce(RegAlloc* alloc);
+    bool color_ifg(RegAlloc* alloc);
+};
+
 /**
   * "Briggs/Chaitin/Click".
   * Graph coloring.
@@ -50,6 +57,12 @@ class RegAlloc {
 
     u32 splills, spill_scaled;
 
+    // Map from Nodes to Live Ranges
+    HMap<Node*,LRG*> lrgs = {};
+    u16 lrg_num = 0;
+
+    Vec<LRG*> unify_lrgs = {}; // TODO why.. i hate it. but maybe more useful that *not* having it
+
     // -----------------------
     // Live ranges with self-conflicts or no allowed registers
     HSet<LRG*> failed {};
@@ -60,10 +73,6 @@ class RegAlloc {
     bool success() { return failed.empty(); }
 
     // -----------------------
-    // Map from Nodes to Live Ranges
-    HMap<Node*,LRG*> lrgs = {};
-    u16 lrg_num = 0;
-
     // Define a new LRG, and assign n
     LRG* create_lrg(Node* n) {
         LRG* lrg = this->get_lrg(n);
@@ -99,7 +108,6 @@ class RegAlloc {
     }
 
     // Force all unified to roll up; collect live ranges
-    Vec<LRG*> unify_lrgs = {}; // TODO why.. i hate it. but maybe more useful that *not* having it
     void unify() {
         unify_lrgs.clear();
         unify_lrgs.resize(this->lrg_num);
@@ -119,186 +127,148 @@ class RegAlloc {
         }
     }
 
+    u16 regnum(Node* n) {
+        LRG* lrg = this->get_lrg(n);
+        assert(lrg != nullptr); // not in Simple
+        return lrg->reg;
+    }
 
-    // public short regnum( Node n ) {
-    //     LRG lrg = lrg(n);
-    //     return lrg==null ? -1 : lrg._reg;
-    // }
+    // -----------------------
+    void allocate() {
+        // in Simple, there's an entire for loop here to save registers when a function gets called. I, of course, don't have functions.
+        // Cache reg masks for New and Call
+        // for(CFGNode* bb : node::cfgrp )
+        //     for(Node* n : bb->output)
+        //         if(n->nt == NodeType::AllocA) n->cache_regs(this);
 
-    // // Printable register number for node n
-    // String reg( Node n ) { return reg(n,null); }
-    // String reg( Node n, FunNode fun ) {
-    //     LRG lrg = lrg(n);
-    //     if( lrg==null ) return null;
-    //     // No register yet, use LRG
-    //     if( lrg._reg == -1 ) return "V"+lrg._lrg;
-    //     // Chosen machine register unless stack-slot and past RA
-    //     String[] regs = _code._mach.regs();
-    //     if( lrg._reg < regs.length || _code._phase.ordinal() <= CodeGen.Phase.RegAlloc.ordinal() || fun==null )
-    //         return RegMask.reg(regs,lrg._reg);
-    //     // Stack-slot past RA uses the frame layout logic
-    //     return "[rsp+"+fun.computeStackOffset(_code,lrg._reg)+"]";
-    // }
+        // Top driver: repeated rounds of coloring and splitting.
+        u8 round = 0;
+        while(!this->graph_color()) {
+            this->split();
+            if(round >= 7) // Really expect to be done soon
+                panic;
+            round++;
+        }
+        this->post_color(); // Remove no-op spills
+    }
 
-    // // -----------------------
-    // RegAlloc( CodeGen code ) { _code = code; }
+    bool graph_color() {
+        failed.clear();
+        lrgs.clear();
+        lrg_num = 1;
+        unify_lrgs.clear();
 
-    // public void regAlloc() {
-    //     // Insert callee-save registers
-    //     String[] regs = _code._mach.regs();
-    //     long neverSave= _code._mach.neverSave();
-    //     for( CFGNode bb : _code._cfg )
-    //         if( bb instanceof FunNode fun ) {
-    //             ReturnNode ret = fun.ret();
-    //             int len = Math.min(regs.length,64);
-    //             for( int reg=0; reg<len; reg++ )
-    //                 if( !_code._callerSave.test(reg) && ((1L<<reg)&neverSave)==0 ) {
-    //                     ret.addDef(new CalleeSaveNode(fun,reg,regs[reg]));
-    //                     assert ret.regmap(ret.nIns()-1).firstReg()==reg;
-    //                 }
-    //         }
-    //     // Cache reg masks for New and Call
-    //     for( CFGNode bb : _code._cfg ) {
-    //         if( bb instanceof CallEndNode cend ) cend.cacheRegs(_code);
-    //         for( Node n : bb._outputs )
-    //             if( n instanceof NewNode nnn ) nnn.cacheRegs(_code);
-    //     }
+        return
+            // Build Live Ranges
+            reg_alloc::build_lrg(this) && // if no hard register conflicts
+            // Build Interference Graph
+            reg_alloc::build_ifg(this) && // If no self conflicts or uncolorable
+            // Conservative coalesce copies
+            reg_alloc::coalesce(this) &&
+            // Color attempt
+            reg_alloc::color_ifg(this); // If colorable
+    }
 
-    //     // Top driver: repeated rounds of coloring and splitting.
-    //     byte round=0;
-    //     while( !graphColor(round) ) {
-    //         split(round);
-    //         if( round >= 7 )    // Really expect to be done soon
-    //             throw Utils.TODO("Allocator taking too long");
-    //         round++;
-    //     }
-    //     postColor();                       // Remove no-op spills
-    // }
+    // -----------------------
+    // Split conflicted live ranges.
+    void split() {
+        // In C2, all splits are handling in one pass over the program.  Here,
+        // in the name of clarity, we'll handle each failing live range
+        // independently... which generally requires a full pass over the
+        // program for each failing live range.  i.e., might be a lot of
+        // passes.
 
-    // private boolean graphColor(byte round) {
-    //     failed.clear();
-    //     _lrgs.clear();
-    //     _lrg_num = 1;
-    //     _LRGS=null;
+        for(LRG* lrg : failed)
+            this->split(lrg);
+    }
 
-    //     return
-    //         // Build Live Ranges
-    //         BuildLRG.run(round,this) && // if no hard register conflicts
-    //         // Build Interference Graph
-    //         IFG.build(round,this) &&    // If no self conflicts or uncolorable
-    //         // Conservative coalesce copies
-    //         Coalesce.coalesce(round,this) &&
-    //         // Color attempt
-    //         IFG.color(round,this);      // If colorable
-    // }
+    // Split this live range, top level heuristic
+    bool split(LRG* lrg) {
+        assert(lrg->is_leader());  // Already rolled up
 
-    // // -----------------------
-    // // Split conflicted live ranges.
-    // void split(byte round) {
+        if(lrg->self_conflicts.size > 0)
+            return this->split_self_conflict(lrg);
 
-    //     // In C2, all splits are handling in one pass over the program.  Here,
-    //     // in the name of clarity, we'll handle each failing live range
-    //     // independently... which generally requires a full pass over the
-    //     // program for each failing live range.  i.e., might be a lot of
-    //     // passes.
+        // Register mask when empty; split around defs and uses with limited register masks.
+        if(lrg->mask.is_empty() && (!lrg->multi_input || lrg->output_count == 1)) {
+            if(lrg->input_count <= 1 && lrg->output_count <= 1 && (lrg->input_count + lrg->output_count) > 0)
+                return this->split_empty_mask_simple(lrg);
+            // Repeated single-reg uses from a single def.  Special for archs with more fixed regs.
+            if(!lrg->multi_input && lrg->input_count <= 1 && lrg->output_count > 2)
+                if(this->split_empty_mask_by_output(lrg))
+                    return true;
+        }
 
-    //     // Sort, to avoid non-deterministic HashMap ordering
-    //     LRG[] splits = _failed.keySet().toArray(new LRG[0]);
-    //     Arrays.sort(splits, (x,y) -> x._lrg - y._lrg );
-    //     for( LRG lrg : splits )
-    //         split(round,lrg);
-    // }
+        // Generic split-by-loop depth.
+        return split_by_loop(lrg);
+    }
 
-    // // Split this live range, top level heuristic
-    // boolean split( byte round, LRG lrg ) {
-    //     assert lrg.leader();  // Already rolled up
+    // Split live range with an empty mask. Specifically forces splits at single-register defs or uses and not elsewhere.
+    bool split_empty_mask_simple(LRG* lrg) {
+        // Live range has a single-def single-register, and/or a single-use
+        // single-register.  Split after the def and before the use.  Does not
+        // require a full pass.
 
-    //     if( lrg._selfConflicts != null )
-    //         return splitSelfConflict(round,lrg);
+        // Split just after def
+        if(lrg->input_count == 1 && !node::x86_is_clone(lrg->n_input)) // is clone = cheaper to recreate than to spill
+            // Force must-split, even if a prior split same block because register conflicts.  Example:
+            //   alloc
+            //     V1/rax - forced by alloc
+            //   alloc
+            //     V2/rax - kills prior RAX
+            //   st4 [V1],len - No good, must split around
+            this->insert_after_and_replace(this->make_split(lrg), (Node*)lrg->n_input, false/*true*/);
+        // Split just before use
+        if(lrg->output_count == 1 || (lrg->input_count == 1 && ((Node*)lrg->n_input)->output.size == 1))
+            this->insert_before((Node*)lrg->n_output, lrg->uidx, lrg);
+        return true;
+    }
 
-    //     // Register mask when empty; split around defs and uses with limited
-    //     // register masks.
-    //     if( lrg._mask.isEmpty() && (!lrg._multiDef || lrg._1regUseCnt==1) ) {
-    //         if( lrg._1regDefCnt <= 1 &&
-    //             lrg._1regUseCnt <= 1 &&
-    //             (lrg._1regDefCnt + lrg._1regUseCnt) > 0 )
-    //             return splitEmptyMaskSimple(round,lrg);
-    //         // Repeated single-reg uses from a single def.  Special for archs
-    //         // with more fixed regs.
-    //         if( !lrg._multiDef && lrg._1regDefCnt <= 1 && lrg._1regUseCnt > 2 )
-    //             if( splitEmptyMaskByUse(round,lrg) )
-    //                 return true;
-    //     }
+    // Single-def live range with an empty mask.  There are many single-reg
+    // uses.  Theory is there's many repeats if the same reg amongst the uses.
+    // In of splitting once per use, start by splitting into groups based on
+    // required input register.
+    bool split_empty_mask_by_use(LRG* lrg) {
+        Node* def = (Node*)lrg->n_input;
 
-    //     // Generic split-by-loop depth.
-    //     return splitByLoop(round,lrg);
-    // }
+        // Look at each use, and break into non-overlapping register classes.
+        Vec<RegMask> rclass = {}; // TODO make scratch
+        bool done = false;
+        while(!done) {
+            done = true;
+            for(Node* use : def->output)
+                // if(use->nt == NodeType::MachineNode) // TODO wrong
+                    for(u32 i = 1; i < use->input.size; i++)
+                        if(use->input[i] == def)
+                            done = put_into_reg_class(rclass, use->regmap(i)); // TODO
+        }
 
-    // // Split live range with an empty mask.  Specifically forces splits at
-    // // single-register defs or uses and not elsewhere.
-    // boolean splitEmptyMaskSimple( byte round, LRG lrg ) {
-    //     // Live range has a single-def single-register, and/or a single-use
-    //     // single-register.  Split after the def and before the use.  Does not
-    //     // require a full pass.
+        // See how many register classes we split into
+        if(rclass.size <= 1) return false;
 
-    //     // Split just after def
-    //     if( lrg._1regDefCnt==1 && !lrg._machDef.isClone() )
-    //         // Force must-split, even if a prior split same block because register
-    //         // conflicts.  Example:
-    //         //   alloc
-    //         //     V1/rax - forced by alloc
-    //         //   alloc
-    //         //     V2/rax - kills prior RAX
-    //         //   st4 [V1],len - No good, must split around
-    //         insertAfterAndReplace( makeSplit("def/empty1",round,lrg), (Node)lrg._machDef, false/*true*/);
-    //     // Split just before use
-    //     if( lrg._1regUseCnt==1 || (lrg._1regDefCnt==1 && ((Node)lrg._machDef).nOuts()==1) )
-    //         insertBefore((Node)lrg._machUse,lrg._uidx,"use/empty1",round,lrg);
-    //     return true;
-    // }
-
-    // // Single-def live range with an empty mask.  There are many single-reg
-    // // uses.  Theory is there's many repeats if the same reg amongst the uses.
-    // // In of splitting once per use, start by splitting into groups based on
-    // // required input register.
-    // boolean splitEmptyMaskByUse( byte round, LRG lrg ) {
-    //     Node def = (Node)lrg._machDef;
-
-    //     // Look at each use, and break into non-overlapping register classes.
-    //     Ary<RegMask> rclass = new Ary<>(RegMask.class);
-    //     boolean done=false;
-    //     while( !done ) {
-    //         done = true;
-    //         for( Node use : def._outputs )
-    //             if( use instanceof MachNode mach )
-    //                 for( int i=1; i<use.nIns(); i++ )
-    //                     if( use.in(i)==def )
-    //                         done = putIntoRegClass( rclass, mach.regmap(i) );
-    //     }
-
-    //     // See how many register classes we split into
-    //     if( rclass._len <= 1 ) return false;
-
-    //     // Split by class
-    //     for( RegMask rmask : rclass ) {
-    //         Node split = makeSplit(def,"popular",round,lrg);
-    //         split.insertAfter( def );
-    //         if( split.nIns()>1 ) split.setDef(1,def);
-    //         // all uses by class to split
-    //         for( int j=0; j < def._outputs._len; j++ ) {
-    //             Node use = def._outputs.at(j);
-    //             if( use instanceof MachNode mach && use!=split ) {
-    //                 // Check all use inputs for n, in case there's several
-    //                 for( int i = 1; i < use.nIns(); i++ )
-    //                     // Find a def input, and check register class
-    //                     if( use.in( i ) == def && mach.regmap( i ).overlap( rmask ) )
-    //                         // Modify use to use the split version specialized to this rclass
-    //                         { use.setDef( i, split ); j--; break; }
-    //             }
-    //         }
-    //     }
-    //     return true;
-    // }
+        // Split by class
+        for(RegMask rmask : rclass) {
+            Node* split = this->make_split(def, lrg);
+            split->insert_after(def);
+            if(split->input.size > 1) split->set_input(1, def); // TODO what?
+            // all uses by class to split
+            for(u32 j = 0; j < def->output.size; j++) {
+                Node* use = def->output[j];
+                if(use->nt == NodeType::MachineNode && use != split) { // TODO
+                    // Check all use inputs for n, in case there's several
+                    for(u32 i = 1; i < use->input.size; i++ )
+                        // Find a def input, and check register class
+                        if(use->input[i] == def && use->regmap(i)->overlap(rmask)) {
+                            // Modify use to use the split version specialized to this rclass
+                            use->set_input(i, split);
+                            j--;
+                            break;
+                        }
+                }
+            }
+        }
+        return true;
+    }
 
 
     // // Put use into a register class, perhaps adding a class or perhaps

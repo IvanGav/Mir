@@ -31,6 +31,11 @@ struct HSet {
         return m;
     }
 
+    void clear() {
+        exists.clear();
+        tombstone.clear();
+    }
+
     bool empty() {
         return size == 0;
     }

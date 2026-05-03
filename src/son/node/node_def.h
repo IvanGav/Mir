@@ -230,5 +230,66 @@ struct Node {
         assert(new_ctrl->cfg());
         this->set_input(0,new_ctrl);
     }
+
+    /* reg alloc related */
+
+    // insert `this` immediately after `input` in the same basic block.
+    void insert_after(Node* input) {
+        todo;
+        // CFGNode cfg = input.cfg0();
+        // int i = cfg._outputs.find(input)+1;
+        // if( cfg instanceof CallEndNode ) {
+        //     cfg = cfg.uctrl();  i=0;
+        // } else if( input.in(0) instanceof MultiNode ) {
+        //     assert i==0;
+        //     i = cfg._outputs.find(input.in(0))+1;
+        // }
+
+        // while( cfg.out(i) instanceof PhiNode || cfg.out(i) instanceof CalleeSaveNode )  i++;
+        // cfg._outputs.insert(this,i);
+        // _inputs.set(0,cfg);
+    }
+
+    // Insert this in front of use.in(uidx) with this, and insert this immediately before use in the basic block.
+    void insert_before(Node* output, u32 uidx) {
+        todo;
+        // CFGNode cfg = use.cfg0();
+        // int i;
+        // if( use instanceof PhiNode phi ) {
+        //     cfg = phi.region().cfg(uidx);
+        //     if( cfg instanceof CProjNode && cfg.in(0) instanceof NeverNode nvr )
+        //         cfg = nvr.cfg0();
+        //     i = cfg.nOuts()-1;
+        // } else {
+        //     i = cfg._outputs.find(use);
+        // }
+        // cfg._outputs.insert(this,i);
+        // _inputs.set(0,cfg);
+        // if( _inputs._len > 1 && this instanceof SplitNode )
+        //     set_input_ordered(1,use.in(uidx));
+        // use.set_input_ordered(uidx,this);
+    }
+
+    void set_input_ordered(u32 idx, Node* input) {
+        todo;
+        // // If old is dying, remove from CFG ordered
+        // Node old = in(idx);
+        // if( old!=null && old.nOuts()==1 ) {
+        //     CFGNode cfg = old.cfg0();
+        //     if( cfg!=null ) {
+        //         cfg._outputs.remove(cfg._outputs.find(old));
+        //         old._inputs.set(0,null);
+        //     }
+        // }
+        // set_input(idx,input);
+    }
+
+    void remove_split() {
+        todo;
+        // CFGNode cfg = cfg0();
+        // cfg._outputs.remove(cfg._outputs.find(this));
+        // _inputs.set(0,null);
+        // if( _inputs._len > 1 ) subsume(in(1));
+    }
     
 };
