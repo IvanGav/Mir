@@ -5,6 +5,7 @@
 #include "register.h"
 #include "lrg.h"
 
+struct RegAlloc;
 namespace reg_alloc {
     bool build_lrg(RegAlloc* alloc);
     bool build_ifg(RegAlloc* alloc);
@@ -42,7 +43,7 @@ namespace reg_alloc {
   * registers also, e.g. older div/mod/mul ops. (5x smaller IFG, the only
   * O(n^2) part of this operation).
   */
-class RegAlloc {
+struct RegAlloc {
     // Main Coloring Algorithm:
     // Repeat until colored:
     //   Build Live Ranges (LRGs)
@@ -61,7 +62,8 @@ class RegAlloc {
     HMap<Node*,LRG*> lrgs = {};
     u16 lrg_num = 0;
 
-    Vec<LRG*> unify_lrgs = {}; // TODO why.. i hate it. but maybe more useful that *not* having it
+    Vec<LRG*> unify_lrgs = {};
+    Vec<Node*> ns = {};
 
     // -----------------------
     // Live ranges with self-conflicts or no allowed registers
@@ -210,7 +212,7 @@ class RegAlloc {
         // require a full pass.
 
         // Split just after def
-        if(lrg->input_count == 1 && !node::x86_is_clone(lrg->n_input)) // is clone = cheaper to recreate than to spill
+        if(lrg->input_count == 1 && !node::x86_is_clone(lrg->n_input)) { // is clone = cheaper to recreate than to spill
             // Force must-split, even if a prior split same block because register conflicts.  Example:
             //   alloc
             //     V1/rax - forced by alloc
@@ -218,9 +220,11 @@ class RegAlloc {
             //     V2/rax - kills prior RAX
             //   st4 [V1],len - No good, must split around
             this->insert_after_and_replace(this->make_split(lrg), (Node*)lrg->n_input, false/*true*/);
+        }
         // Split just before use
-        if(lrg->output_count == 1 || (lrg->input_count == 1 && ((Node*)lrg->n_input)->output.size == 1))
+        if(lrg->output_count == 1 || (lrg->input_count == 1 && ((Node*)lrg->n_input)->output.size == 1)) {
             this->insert_before((Node*)lrg->n_output, lrg->uidx, lrg);
+        }
         return true;
     }
 
@@ -237,7 +241,7 @@ class RegAlloc {
         while(!done) {
             done = true;
             for(Node* use : def->output)
-                // if(use->nt == NodeType::MachineNode) // TODO wrong
+                if(use->nt == NodeType::MachineNode) // TODO wrong
                     for(u32 i = 1; i < use->input.size; i++)
                         if(use->input[i] == def)
                             done = put_into_reg_class(rclass, use->regmap(i)); // TODO
@@ -271,321 +275,328 @@ class RegAlloc {
     }
 
 
-    // // Put use into a register class, perhaps adding a class or perhaps
-    // // narrowing a class (and causing a repeat)
-    // private static boolean putIntoRegClass( Ary<RegMask> rclass, RegMask rmask ) {
-    //     for( int i=0; i<rclass._len; i++ ) {
-    //         RegMask omask = rclass.at(i);
-    //         if( omask.and(rmask) == omask ) return true; // Within the same register class
-    //         if( omask.overlap(rmask) ) {
-    //             rclass.set(i,new RegMask(omask.copy().and(rmask)));
-    //             return false;   // Need go again
-    //         }
-    //     }
-    //     // Add a new class, no need to go again
-    //     rclass.push(rmask);
-    //     return true;
-    // }
+    // Put use into a register class, perhaps adding a class or perhaps narrowing a class (and causing a repeat)
+    bool put_into_reg_class(Vec<RegMask>& rclass, RegMask rmask) {
+        for(u32 i = 0; i < rclass.size; i++) {
+            RegMask omask = rclass[i];
+            if((omask & rmask) == omask) return true; // Within the same register class
+            if(omask.overlaps(rmask)) {
+                rclass[i] = omask & rmask;
+                return false; // Need to go again
+            }
+        }
+        // Add a new class, no need to go again
+        rclass.push(rmask);
+        return true;
+    }
 
-    // // Self conflicts require Phis (or two-address).
-    // // Insert a split after every def.
-    // boolean splitSelfConflict( byte round, LRG lrg ) {
-    //     // Sort conflict set, so we're deterministic
-    //     Node[] conflicts = lrg._selfConflicts.keySet().toArray(new Node[0]);
-    //     Arrays.sort(conflicts, (x,y) -> x._nid - y._nid );
+    // Self conflicts require Phis (or two-address). Insert a split after every def.
+    bool split_self_conflict(LRG* lrg) {
+        HSet<Node*>& conflicts = lrg->self_conflicts; // TODO sort??
 
-    //     // For all conflicts
-    //     for( Node def : conflicts ) {
-    //         assert lrg(def)==lrg; // Might be conflict use-side
-    //         // Split before each use that extends the live range; i.e. is a
-    //         // Phi or two-address
-    //         for( int i=0; i<def._outputs._len; i++ ) {
-    //             Node use = def.out(i);
-    //             if( (use instanceof PhiNode phi &&
-    //                  !(phi.region() instanceof LoopNode loop && phi.in(2)==def && def.cfg0().idepth() > loop.idepth() ) ) ||
-    //                     (use instanceof MachNode mach && mach.twoAddress()!=0 && use.in(mach.twoAddress())==def) )
-    //                 insertBefore( use, use._inputs.find(def), "use/self/use",round,lrg );
-    //         }
-    //         // Split after the Phi which extends the LRG.  Split also before
-    //         // Phi slot 1 (and not all inputs), because Phis extend the live range.
-    //         // TODO: split before all inputs (except the last; at least 1 split here must be extra)
-    //         if( def instanceof PhiNode phi && !(def instanceof ParmNode) ) {
-    //             SplitNode split = makeSplit("def/self",round,lrg);
-    //             insertAfterAndReplace(split,def,false);
-    //             if( split.nOuts()==0 )
-    //                 split.killOrdered();
-    //             insertBefore(phi,1,"use/self/phi",round,lrg);
-    //         }
-    //         // Split before two-address ops which extend the live range
-    //         if( def instanceof MachNode mach && mach.twoAddress()!= 0 )
-    //             insertBefore(def,mach.twoAddress(),"use/self/two",round,lrg);
-    //     }
-    //     return true;
-    // }
-
-
-    // // Generic: split around the outermost loop with non-split def/uses.  This
-    // // covers both self-conflicts (once we split deep enough) and register
-    // // pressure issues.
-    // boolean splitByLoop( byte round, LRG lrg ) {
-    //     findAllLRG(lrg);
-
-    //     // Find min loop depth for all non-split defs and uses.
-    //     long ld = (-1L<<32) | 9999;
-    //     for( Node n : _ns ) {
-    //         if( lrg(n)==lrg ) // This is a LRG def
-    //             ld = ldepth(ld,n,n.cfg0());
-    //         // PhiNodes check all CFG inputs
-    //         if( n instanceof PhiNode phi ) {
-    //             for( int i=1; i<n.nIns(); i++ )
-    //                 ld = ldepth(ld, phi.in(i), phi.region().cfg(i));
-    //         } else {
-    //             // Others check uses
-    //             for( int i=1; i<n.nIns(); i++ )
-    //                 if( lrgSame(n.in(i),lrg) ) // This is a LRG use
-    //                     ld = ldepth(ld,n,n.cfg0());
-    //         }
-    //     }
-    //     int min = (int)ld;
-    //     int max = (int)(ld>>32);
+        // For all conflicts
+        for(Node* def : conflicts) {
+            assert(this->get_lrg(def) == lrg); // Might be conflict use-side
+            // Split before each use that extends the live range; i.e. is a Phi or two-address
+            for(u32 i = 0; i < def->output.size; i++) {
+                Node* use = def->output[i];
+                // TODO this needs to be done right
+                if((use->nt == NodeType::Phi && 
+                    !(use->ctrl()->nt == NodeType::Loop && use->input[2] == def && 
+                    def->ctrl()->idepth() > use->ctrl()->idepth())) ||
+                    (use->nt == NodeType::MachineNode && use->two_address() != 0 && use->input[use->two_address()] == def)
+                ) {
+                    this->insert_before(use, use->input.index_of(def), lrg);
+                }
+            }
+            // Split after the Phi which extends the LRG.  Split also before
+            // Phi slot 1 (and not all inputs), because Phis extend the live range.
+            // TODO: split before all inputs (except the last; at least 1 split here must be extra)
+            if(def->nt == NodeType::Phi && def->nt != NodeType::ParameterNode) {
+                Node* split = this->make_split(lrg);
+                this->insert_after_and_replace(split, def, false);
+                if(split->output.size == 0)
+                    split->kill_ordered();
+                this->insert_before(def, 1, lrg);
+            }
+            // Split before two-address ops which extend the live range
+            if(def->nt == NodeType::MachineNode && def->two_address() != 0)
+                this->insert_before(def, def->two_address(), lrg);
+        }
+        return true;
+    }
 
 
-    //     // If the minLoopDepth is less than the maxLoopDepth: for-all defs and
-    //     // uses, if at minLoopDepth or lower, split after def and before use.
-    //     for( Node n : _ns ) {
-    //         if( n instanceof SplitNode ) continue; // Ignoring splits; since spilling need to split in a deeper loop
-    //         if( n.isDead() ) continue; // Some Clonable went dead by other spill changes
-    //         // If this is a 2-address commutable op (e.g. AddX86, MulX86) and the rhs has only a single user,
-    //         // commute the inputs... which chops the LHS live ranges' upper bound to just the RHS.
-    //         if( n instanceof MachNode mach && lrg(n)==lrg && mach.twoAddress()==1 && mach.commutes() && n.in(2).nOuts()==1 )
-    //             n.swap12();
+    // Generic: split around the outermost loop with non-split def/uses.  This
+    // covers both self-conflicts (once we split deep enough) and register pressure issues.
+    bool split_by_loop(LRG* lrg) {
+        this->find_all_lrg(lrg);
 
-    //         if( lrg(n)==lrg && // This is a LRG def
-    //             // At loop boundary, or splitting in inner loop
-    //             (min==max || n.cfg0().loopDepth() <= min) ) {
-    //             // Cloneable constants will be cloned at uses, not after def
-    //             if( !(n instanceof MachNode mach && mach.isClone()) &&
-    //                 // Single user is already a split adjacent
-    //                 !(n.nOuts()==1 && n.out(0) instanceof SplitNode split && sameBlockNoClobber(split) ) )
-    //                 // Split after def in min loop nest
-    //                 insertAfterAndReplace( makeSplit("def/loop",round,lrg), n,true);
-    //         }
-
-    //         // PhiNodes check all CFG inputs
-    //         if( n instanceof PhiNode phi && !(n instanceof ParmNode)) {
-    //             for( int i=1; i<n.nIns(); i++ )
-    //                 // No split in front of a split
-    //                 if( !(n.in(i) instanceof SplitNode) &&
-    //                     // splitting in inner loop or at loop border
-    //                     (min==max || phi.region().cfg(i).loopDepth() <= min) &&
-    //                     // and not around the backedge of a loop (bad place to force a split, hard to remove)
-    //                     !(phi.region() instanceof LoopNode && i==2 && (phi.in(i) instanceof PhiNode pp && pp.region()==phi.region())) )
-    //                     // Split before phi-use in prior block
-    //                     insertBefore(phi,i, "use/loop/phi",round,lrg);
-
-    //         } else {
-    //             // Others check uses
-    //             for( int i=1; i<n.nIns(); i++ ) {
-    //                 // This is a LRG use
-    //                 // splitting in inner loop or at loop border
-    //                 if( lrgSame( n.in( i ), lrg ) &&
-    //                     (min == max || (n.in(i) instanceof MachNode mach && mach.isClone()) || n.cfg0().loopDepth() <= min) )
-    //                     // Split before in this block
-    //                     insertBefore( n, i, "use/loop/use", round,lrg, false );
-    //             }
-    //         }
-    //     }
-    //     return true;
-    // }
-
-    // private boolean lrgSame(Node x, LRG lrg) {
-    //     LRG xlrg = lrg(x);
-    //     while( xlrg==null && x instanceof SplitNode )
-    //         xlrg=lrg(x = x.in(1));
-    //     return xlrg==lrg;
-    // }
-
-    // private static long ldepth( long ld, Node n, CFGNode cfg ) {
-    //     // Do not count splits
-    //     if( n instanceof SplitNode ) return ld;
-    //     // Collect min/max loop depth
-    //     int min = (int)ld;
-    //     int max = (int)(ld>>32);
-    //     int d = cfg.loopDepth();
-    //     // if n will lower the min loop and is in the tail end of the loop
-    //     // header, splitting "around" the loop will not help.  Treat n as being
-    //     // in the loop.
-    //     if( d < min ) {
-    //         if( cfg.uctrl() instanceof LoopNode loop && loop.entry()==cfg ) {
-    //             for( int i=cfg.nOuts()-2; i>=0; i-- ) {
-    //                 Node out = cfg.out(i);
-    //                 if( n==out )
-    //                     { d = loop.loopDepth(); break; } // Treat n as being "in the loop"
-    //                 if( !((out instanceof MachNode mach && mach.isClone()) || out instanceof SplitNode ) )
-    //                     break;  // Treat b as "normal", out of loop
-    //             }
-    //         }
-    //     }
-
-    //     // lower min, raise max, and re-fold
-    //     min = Math.min(min,d);
-    //     max = Math.max(max,d);
-    //     return ((long)max<<32) | min;
-    // }
-
-    // // Find all members of a live range, both defs and uses
-    // private final Ary<Node> _ns = new Ary<>(Node.class);
-    // void findAllLRG( LRG lrg ) {
-    //     _ns.clear();
-    //     int wd = 0;
-    //     _ns.push((Node)lrg._machDef);
-    //     _ns.push((Node)lrg._machUse);
-    //     while( wd < _ns._len ) {
-    //         Node n = _ns.at(wd++);
-    //         if( lrg(n)!=lrg ) continue;
-    //         for( Node def : n._inputs )
-    //             if( lrg(def)==lrg && _ns.find(def)== -1 )
-    //                 _ns.push(def);
-    //         for( Node use : n._outputs )
-    //             if( _ns.find(use)== -1 )
-    //                 _ns.push(use);
-    //     }
-    //     for( Node n : _ns ) assert !n.isDead();
-    // }
-
-    // void insertBefore(Node n, int i, String kind, byte round, LRG lrg, boolean skip) {
-    //     Node def = n.in(i);
-    //     // Effective block for use
-    //     CFGNode cfg = n instanceof PhiNode phi ? phi.region().cfg(i) : n.cfg0();
-    //     // Def is a split ?
-    //     if( skip && def instanceof SplitNode ) {
-    //         boolean singleReg = n instanceof MachNode mach && mach.regmap(i).size1();
-    //         // Same block, multiple registers, split is only used by n,
-    //         // assume this is good enough and do not split again.
-    //         if( cfg==def.cfg0() && def.nOuts()==1 && !singleReg )
-    //             return;
-    //     }
-    //     makeSplit(def,kind,round,lrg).insertBefore(n, i);
-    //     // Skip split-of-split same block
-    //     if( skip && def instanceof SplitNode && cfg==def.cfg0() )
-    //         n.in(i).setDefOrdered(1,def.in(1));
-    // }
-    // void insertBefore(Node n, int i, String kind, byte round, LRG lrg) {
-    //     insertBefore(n,i,kind,round,lrg,true);
-    // }
-
-    // // Replace uses of `def` with `split`, and insert `split` immediately after
-    // // `def` in the basic block.
-    // public void insertAfterAndReplace( Node split, Node def, boolean must ) {
-    //     split.insertAfter(def);
-    //     if( split.nIns()>1 ) split.setDef(1,def);
-    //     for( int j=def.nOuts()-1; j>=0; j-- ) {
-    //         Node use = def.out(j);
-    //         if( use==split ) continue; // Skip self
-    //         // Can we avoid a split of a split?  'this' split is used by
-    //         // another split in the same block.
-    //         if( !must && use instanceof SplitNode split2 && sameBlockNoClobber(split2) )
-    //             continue;
-    //         int idx = use._inputs.find(def);
-    //         use.setDefOrdered(idx,split);
-    //         if( j < def.nOuts() ) j++;
-    //     }
-    // }
-
-    // private Node makeSplit( Node def, String kind, byte round, LRG lrg ) {
-    //     Node split = def instanceof MachNode mach && mach.isClone()
-    //         ? mach.copy()
-    //         : _code._mach.split(kind,round,lrg);
-    //     _lrgs.put(split,lrg);
-    //     return split;
-    // }
-    // private SplitNode makeSplit( String kind, byte round, LRG lrg ) {
-    //     SplitNode split = _code._mach.split(kind,round,lrg);
-    //     _lrgs.put(split,lrg);
-    //     return split;
-    // }
+        // Find min loop depth for all non-split defs and uses.
+        todo; // this ld should be signed, but also maybe just a pair of u32 or i32? when i get to ldepth, i'll know
+        P<u32,u32> ld {0,9999};
+        for(Node* n : this->ns ) {
+            if(this->get_lrg(n) == lrg) // This is a LRG def
+                ld = this->ldepth(ld, n, n->ctrl());
+            // PhiNodes check all CFG inputs
+            if(n->nt == NodeType::Phi) {
+                for(u32 i = 1; i < n->input.size; i++)
+                    ld = this->ldepth(ld, n->input[i], n->ctrl()->ctrl(i));
+            } else {
+                // Others check uses
+                for(u32 i = 1; i < n->input.size; i++)
+                    if(this->lrg_same(n->input[i], lrg)) // This is a LRG use
+                        ld = this->ldepth(ld, n, n->ctrl());
+            }
+        }
+        u32 minl = ld.a;
+        u32 maxl = ld.b;
 
 
-    // // -----------------------
-    // // POST PASS: Remove empty spills that biased-coloring made
-    // private void postColor() {
-    //     int maxReg = -1;
-    //     for( CFGNode bb : _code._cfg ) { // For all ops
-    //         if( bb instanceof FunNode fun )
-    //             maxReg = -1;   // Reset for new function
-    //         // Compute frame size, based on arguments and largest reg seen
-    //         if( bb instanceof ReturnNode ret )
-    //             ret.fun().computeFrameAdjust(_code,maxReg);
-    //         // Raise frame size by max stack args passed, even if ignored
-    //         if( bb instanceof CallEndNode cend )
-    //             maxReg = Math.max(maxReg,cend._xslot);
+        // If the minLoopDepth is less than the maxLoopDepth: for-all defs and
+        // uses, if at minLoopDepth or lower, split after def and before use.
+        for(Node* n : ns) {
+            if(n->nt == NodeType::Split) continue; // Ignoring splits; since spilling need to split in a deeper loop
+            if(n->is_dead()) continue; // Some Clonable went dead by other spill changes
+            // If this is a 2-address commutable op (e.g. AddX86, MulX86) and the rhs has only a single user,
+            // commute the inputs... which chops the LHS live ranges' upper bound to just the RHS.
 
-    //         for( int j=0; j<bb.nOuts(); j++ ) {
-    //             Node n = bb.out(j);
-    //             if( lrg(n)!=null )
-    //                 maxReg = Math.max(maxReg,lrg(n).reg+1);
-    //             // Raise frame size by max stack args passed to New
-    //             if( n instanceof NewNode nnn )
-    //                 maxReg = Math.max(maxReg,nnn._xslot);
+            todo; // UGEFHOANOAWNDOWANDP
+            if(n->nt == NodeType::MachineNode && this->get_lrg(n) == lrg && n->two_address() == 1 && n->commutes() && n->input[2]->output.size == 1)
+                n->swap12();
 
-    //             if( !(n instanceof SplitNode ) ) continue;
-    //             int defreg = lrg(n     ).reg;
-    //             int usereg = lrg(n.in(1)).reg;
-    //             // Attempt to bypass split
-    //             if( defreg != usereg && splitBypass(bb,j,n,defreg) )
-    //                 usereg = lrg(n.in(1)).reg;
+            if(this->get_lrg(n) == lrg && // This is a LRG def
+                // At loop boundary, or splitting in inner loop
+                (min == max || n->ctrl()->loop_depth() <= min) ) {
+                // Cloneable constants will be cloned at uses, not after def
+                if(!(n->nt == NodeType::MachineNode && mach->is_clone()) &&
+                    // Single user is already a split adjacent
+                    !(n->output.size == 1 && n->output[0]->nt == NodeType::Split && this->same_nlock_no_clobber(n->output[0])))
+                    // Split after def in min loop nest
+                    this->insert_after_and_replace(this->make_split(lrg), n, true);
+            }
 
-    //             // Split has same reg?  Useless!  Can remove it!
-    //             if( defreg == usereg ) {
-    //                 n.removeSplit();
-    //                 j--;
-    //                 continue;
-    //             }
-    //             // Split is kept; count against split score
-    //             splills++;
-    //             spill_scaled += (1<<bb.loopDepth()*3);
-    //             assert _spillScaled >= 0;
-    //         }
-    //     }
-    // }
+            // PhiNodes check all CFG inputs
+            if(n->nt == NodeType::Phi && n->nt != NodeType::ParameterNode) {
+                for(u32 i = 1; i < n->input.size; i++ )
+                    // No split in front of a split
+                    if(!(n->input[i]->nt == NodeType::Split) &&
+                        // splitting in inner loop or at loop border
+                        (min == max || n->ctrl()->ctrl(i)->loop_depth() <= min) &&
+                        // and not around the backedge of a loop (bad place to force a split, hard to remove)
+                        !(n->ctrl()->nt == NodeType::Loop && i == 2 && (n->input[i]->nt == NodeType::Phi && n->input[i]->ctrl() == n->ctrl()))
+                    ) {
+                        // Split before phi-use in prior block
+                        this->insert_before(n, i, lrg);
+                    }
+            } else {
+                // Others check uses
+                for(u32 i = 1; i < n->input.size; i++ ) {
+                    // This is a LRG use
+                    // splitting in inner loop or at loop border
+                    if(this->lrg_same(n->input[i], lrg) &&
+                        (min == max || (n->input[i]->nt == NodeType::MachineNode && n->input[i]->is_clone()) || n->ctrl()->loop_depth() <= min) )
+                        // Split before in this block
+                        this->insert_before(n, i, lrg, false);
+                }
+            }
+        }
+        return true;
+    }
 
-    // private boolean splitBypass( CFGNode bb, int j, Node lo, int defreg ) {
-    //     // Attempt to bypass split
-    //     Node hi = lo.in(1);
-    //     while( true ) {
-    //         if( !(hi instanceof SplitNode && lo.cfg0() == hi.cfg0()) )
-    //             return false;
-    //         if( lrg(hi.in(1)).reg==defreg )
-    //             break;
-    //         hi = hi.in(1);
-    //     }
-    //     // Check no clobbers
-    //     for( int idx = j-1; bb.out(idx) != hi; idx++) {
-    //         Node n = bb.out(idx);
-    //         if( lrg(n)!=null && lrg(n).reg == defreg )
-    //             return false;   // Clobbered
-    //     }
-    //     lo.setDefOrdered(1,hi.in(1));
-    //     return true;
-    // }
+    bool lrg_same(Node* x, LRG* lrg) {
+        LRG* xlrg = this->get_lrg(x);
+        while(xlrg == nullptr && x->nt == NodeType::Split) {
+            x = x->input[1]; // TODO wth
+            xlrg = this->get_lrg(x);
+        }
+        return xlrg==lrg;
+    }
+
+    // the input and output loopdepth ld is Pair{min loop depth, max loop depth}
+    P<u32,u32> ldepth(P<u32,u32> ld, Node* n, CFGNode* cfg) {
+        // Do not count splits
+        if(n->nt == NodeType::Split) return ld;
+        // Collect min/max loop depth
+        u32 minl = ld.a;
+        u32 maxl = ld.b;
+        u32 d = cfg->loop_depth();
+        // if n will lower the min loop and is in the tail end of the loop
+        // header, splitting "around" the loop will not help.  Treat n as being
+        // in the loop.
+        if(d < minl) {
+            if(cfg->ctrl()->nt == NodeType::Loop && ((NodeRegion*)(cfg->ctrl()))->entry() == cfg) {
+                CFGNode* loop = cfg->ctrl();
+                for(u32 i = cfg->output.size - 2; i >= 0; i--) { // TODO why in reverse..??
+                    Node* out = cfg->output[i];
+                    if(n == out) {
+                        // Treat n as being "in the loop"
+                        d = loop->loop_depth(); 
+                        break;
+                    }
+                    if(!((out->nt == NodeType::MachineNode && out->is_clone()) || out->nt == NodeType::Split))
+                        break; // Treat b as "normal", out of loop
+                }
+            }
+        }
+
+        // lower min, raise max, and re-fold
+        minl = min(minl, d);
+        maxl = max(maxl, d);
+        return P{minl,maxl};
+    }
+
+    // Find all members of a live range, both defs and uses
+    void find_all_lrg(LRG* lrg) {
+        ns.clear();
+        u32 wd = 0;
+        ns.push(lrg->n_input);
+        ns.push(lrg->n_output);
+        while(wd < ns.size) {
+            Node* n = ns[wd];
+            wd++;
+            if(this->get_lrg(n) != lrg) continue;
+            for(Node* def : n->input)
+                if(this->get_lrg(def) == lrg && !ns.contains(def))
+                    ns.push(def);
+            for(Node* use : n->output)
+                if(!ns.contains(use))
+                    ns.push(use);
+        }
+        for(Node* n : ns) assert(!n->is_dead());
+    }
+
+    void insert_before(Node* n, u32 i, LRG* lrg, bool skip = true) {
+        Node* def = n->input[i];
+        // Effective block for use
+        CFGNode* cfg = n->nt == NodeType::Phi ? n->ctrl()->ctrl(i) : n->ctrl();
+        // Def is a split ?
+        if(skip && def->nt == NodeType::Split) {
+            bool single_reg = n->nt == NodeType::MachineNode && n->regmap(i).size1();
+            // Same block, multiple registers, split is only used by n,
+            // assume this is good enough and do not split again.
+            if(cfg == def->ctrl() && def->output.size == 1 && !single_reg)
+                return;
+        }
+        this->make_split(def, lrg)->insert_before(n, i);
+        // Skip split-of-split same block
+        if(skip && def->nt == NodeType::Split && cfg == def->ctrl())
+            n->input[i]->set_input_ordered(1, def->input[1]); // TODO what the hhhh
+    }
+
+    // Replace uses of `def` with `split`, and insert `split` immediately after `def` in the basic block.
+    void insert_after_and_replace(Node* split, Node* def, bool must) {
+        split->insert_after(def);
+        if(split->input.size > 1) split->set_input(1, def); // TODO what is this, once again..???
+        for(u32 j = def->output.size - 1; j >= 0; j--) { // TODO why reverse once again?
+            Node* use = def->output[j];
+            if(use == split) continue; // Skip self
+            // Can we avoid a split of a split?  'this' split is used by another split in the same block.
+            if(!must && use->nt == NodeType::Split && this->same_block_no_clobber(use) )
+                continue;
+            u32 idx = use->input.index_of(def);
+            use->set_input_ordered(idx, split);
+            if(j < def->output.size) j++;
+        }
+    }
+
+    Node* make_split(Node* def, LRG* lrg) {
+        todo;
+        Node* split = def->nt == NodeType::MachineNode && def->is_clone()
+            ? def->copy()
+            : _code._mach.split(kind,round,lrg); // TODO this tbh
+        this->lrgs.add(split, lrg);
+        return split;
+    }
+    // returns a NodeSplit
+    Node* makeSplit(LRG* lrg) {
+        todo;
+        // SplitNode split = _code._mach.split(kind,round,lrg);
+        // _lrgs.put(split,lrg);
+        // return split;
+    }
 
 
-    // public boolean sameBlockNoClobber( SplitNode split ) {
-    //     Node def = split.in(1);
-    //     CFGNode cfg = def.cfg0();
-    //     if( cfg != split.cfg0() ) return false; // Not same block
-    //     // Get multinode head
-    //     Node def0 = def instanceof ProjNode ? def.in(0) : def;
-    //     int defreg = lrg(def).reg;
-    //     if( defreg == -1 ) defreg = lrg(def).mask.firstReg();
-    //     if( defreg == -1 ) return false; // no allowed registers -> clobbered
-    //     for( int idx = cfg._outputs.find(split) -1; idx >= 0; idx-- ) {
-    //         Node n = cfg.out(idx);
-    //         if( n==def0 ) return true;    // No clobbers
-    //         if( lrg(n) == lrg(def) ) return false; // Self conflict
-    //         if( lrg(n)!=null && lrg(n).reg == defreg )
-    //             return false;   // Clobbered
-    //     }
-    //     throw Utils.TODO();
-    // }
+    // -----------------------
+    // POST PASS: Remove empty spills that biased-coloring made
+    void postColor() {
+        todo;
+        // u32 max_reg = U32_MAX;
+        // // For all ops
+        // for(CFGNode* bb : node::cfgrp) {
+        //     // Compute frame size, based on arguments and largest reg seen
+        //     if( bb instanceof ReturnNode ret )
+        //         ret.fun().computeFrameAdjust(_code,maxReg);
+        //     // Raise frame size by max stack args passed, even if ignored
+        //     if( bb instanceof CallEndNode cend )
+        //         maxReg = Math.max(maxReg,cend._xslot);
+
+        //     for( int j=0; j<bb.nOuts(); j++ ) {
+        //         Node n = bb.out(j);
+        //         if( lrg(n)!=null )
+        //             maxReg = Math.max(maxReg,lrg(n).reg+1);
+        //         // Raise frame size by max stack args passed to New
+        //         if( n instanceof NewNode nnn )
+        //             maxReg = Math.max(maxReg,nnn._xslot);
+
+        //         if( !(n instanceof SplitNode ) ) continue;
+        //         int defreg = lrg(n     ).reg;
+        //         int usereg = lrg(n.in(1)).reg;
+        //         // Attempt to bypass split
+        //         if( defreg != usereg && splitBypass(bb,j,n,defreg) )
+        //             usereg = lrg(n.in(1)).reg;
+
+        //         // Split has same reg?  Useless!  Can remove it!
+        //         if( defreg == usereg ) {
+        //             n.removeSplit();
+        //             j--;
+        //             continue;
+        //         }
+        //         // Split is kept; count against split score
+        //         splills++;
+        //         spill_scaled += (1<<bb.loopDepth()*3);
+        //         assert _spillScaled >= 0;
+        //     }
+        // }
+    }
+
+    bool split_bypass(CFGNode* bb, u32 j, Node* lo, u32 defreg) {
+        // Attempt to bypass split
+        Node* hi = lo->input[1]; // TODO wth
+        while(true) {
+            if(!(hi->nt == NodeType::Split && lo->ctrl() == hi->ctrl()))
+                return false;
+            if(this->get_lrg(hi->input[1])->reg == defreg)
+                break;
+            hi = hi->input[1];
+        }
+        // Check no clobbers
+        for(u32 idx = j-1; bb->output[idx] != hi; idx++) {
+            Node* n = bb->output[idx];
+            if(this->get_lrg(n) != nullptr && this->get_lrg(n)->reg == defreg)
+                return false; // Clobbered
+        }
+        lo->set_input_ordered(1, hi->input[1]);
+        return true;
+    }
+
+    bool same_block_no_clobber(Node* split) {
+        assert(split->nt == NodeType::Split);
+        Node* def = split->input[1]; // TODO don't
+        CFGNode* cfg = def->ctrl();
+        if(cfg != split->ctrl()) return false; // Not same block
+        // Get multinode head
+        // TODO later i'd need to do this: // Node* def0 = def->nt == NodeType::Proj ? def->input[0] : def;
+        u32 defreg = this->get_lrg(def)->reg;
+        if(defreg == U32_MAX) defreg = this->get_lrg(def)->mask.first_reg();
+        if(defreg == U32_MAX) return false; // no allowed registers -> clobbered
+        for(u32 idx = cfg->output.index_of(split) - 1; idx >= 0; idx--) { // TODO i'm tired
+            Node* n = cfg->output[idx];
+            if(n == def) return true; // No clobbers
+            if(this->get_lrg(n) == this->get_lrg(def)) return false; // Self conflict
+            if(this->get_lrg(n) != nullptr && this->get_lrg(n)->reg == defreg)
+                return false; // Clobbered
+        }
+        todo;
+    }
 };

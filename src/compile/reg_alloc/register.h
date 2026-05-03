@@ -60,8 +60,18 @@ struct RegMask {
     RegMask operator-(RegMask const& other) const {
         return RegMask { .regs = u64(this->regs & ~other.regs) };
     }
-    RegMask operator-(u8 reg) const {
-        return RegMask { .regs = u64(this->regs & ~(1 << reg)) };
+    RegMask operator-(u8 other) const {
+        return RegMask { .regs = u64(this->regs & ~(1 << other)) };
+    }
+    auto operator<=>(RegMask const&) const = default;
+    // bool operator==(RegMask const& reg) const {
+    //     return regs == reg.regs;
+    // }
+    bool overlaps(RegMask const& other) const {
+        return (regs & other.regs) > 0;
+    }
+    u32 first_reg() const {
+        todo;
     }
 };
 

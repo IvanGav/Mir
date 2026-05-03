@@ -132,6 +132,9 @@ struct NodeRegion {
     bool is_incomplete() {
         return this->ctrl(this->ctrl_size()-1) == nullptr;
     }
+
+    CFGNode* entry() { assert(self.nt == NodeType::Loop); return self.input[1]; }
+    CFGNode* back() { assert(self.nt == NodeType::Loop); return self.input[2]; }
 };
 
 /* either cfg or data */
