@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../core/prelude.h"
-#include "../../core/str.h"
+#include "../../son/prelude.h"
+#include "../../son/node.h"
 
 // Registers for x86 64 v2. No float support in my version for now.
 
@@ -52,7 +52,7 @@ struct RegMask {
 
     // set bit count
     u8 size() { todo; }
-    bool size1() { return (regs & -regs) == regs; }
+    bool is_size_1() { return (regs & -regs) == regs; }
     bool is_empty() { return regs == 0; }
     RegMask operator&(RegMask const& other) const {
         return RegMask { .regs = u64(this->regs & other.regs) };
@@ -80,7 +80,24 @@ RegMask WMASK = RegMask { u64(RMASK.regs ^ bRSP) }; // cannot write to stack poi
 
 
 
-
+namespace x86 {
+    RegMask regmap(Node* n, u32 i) {
+        todo;
+    }
+    RegMask outregmap(Node* n) {
+        todo;
+    }
+    // is clone = cheaper to recreate than to spill
+    bool is_clone(Node* n) {
+        todo;
+    }
+    u32 two_address(Node* n) {
+        todo;
+    }
+    bool commutes(Node* n) {
+        todo;
+    }
+};
 
 
 

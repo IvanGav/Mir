@@ -167,7 +167,7 @@ struct LRG {
 
     bool has_split() { return split_input != nullptr || split_output != nullptr; }
     u8 size() { return mask.size(); }
-    bool size1() { return mask.size1(); }
+    bool size1() { return mask.is_size_1(); }
 
     void self_conflict(Node* input) {
         self_conflicts.add(input);

@@ -291,5 +291,14 @@ struct Node {
         // _inputs.set(0,null);
         // if( _inputs._len > 1 ) subsume(in(1));
     }
+
+    // Preserve CFG use-ordering when killing
+    // TODO not sure why it's even needed.. but i guess might as well
+    void kill_ordered() {
+        CFGNode* cfg = this->ctrl();
+        cfg->output.remove_first_of(this);
+        this->input[0] = nullptr;
+        this->kill();
+    }
     
 };
