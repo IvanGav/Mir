@@ -22,6 +22,7 @@ std::ostream& operator<<(std::ostream& os, NodeType nt) {
         case NodeType::Load:        return os << "Load";
         case NodeType::Store:       return os << "Store";
         case NodeType::AllocA:      return os << "AllocA";
+        case NodeType::Split:       return os << "Split";
     }
     unreachable;
 }
@@ -136,6 +137,12 @@ std::ostream& operator<<(std::ostream& os, Node* n) {
             return os;
         }
         
+        case NodeType::Split: {
+            os << "\tinput.size = " << n->input.size << "\n";
+            os << "\tit's a split...\n";
+            return os;
+        }
+        
         case NodeType::Undefined: {
             os << "\tinput.size = " << n->input.size << "\n";
             return os;
@@ -180,6 +187,7 @@ namespace node {
         case NodeType::Load:        return "Load"_s;
         case NodeType::Store:       return "Store"_s;
         case NodeType::AllocA:      return "AllocA"_s;
+        case NodeType::Split:       return "Split"_s;
     }
     unreachable;
 }

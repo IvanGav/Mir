@@ -51,7 +51,9 @@ struct RegMask {
     u64 regs; // additional 48 bits are for spills and stuff
 
     // set bit count
-    u8 size() { todo; }
+    u8 size() const {
+        return (u8) __builtin_popcountll(regs); // TODO is.. that rightt???
+    }
     bool is_size_1() { return (regs & -regs) == regs; }
     bool is_empty() { return regs == 0; }
     RegMask operator&(RegMask const& other) const {
@@ -64,38 +66,143 @@ struct RegMask {
         return RegMask { .regs = u64(this->regs & ~(1 << other)) };
     }
     auto operator<=>(RegMask const&) const = default;
-    // bool operator==(RegMask const& reg) const {
-    //     return regs == reg.regs;
-    // }
     bool overlaps(RegMask const& other) const {
         return (regs & other.regs) > 0;
     }
     u32 first_reg() const {
-        todo;
+        if(regs == 0) { warn; return U32_MAX; } // no register available
+        return __builtin_ctzll(regs);
     }
 };
 
 RegMask RMASK = RegMask { U16_MAX }; // can read from any register
 RegMask WMASK = RegMask { u64(RMASK.regs ^ bRSP) }; // cannot write to stack pointer
 
+// TODO_AI note that most of these were done by Claude
+/*
+For comparisons could do:
 
+On NodeBinOp:
+cmp lhs, rhs
+setl al          ; or setg, sete, etc.
+movzx rax, al   ; zero-extend byte to 64-bit
 
+On NodeIf:
+test rax, rax
+jnz true_label
+jmp false_label
+*/
 namespace x86 {
+    // TODO shift amount is `rcx` only; div/mod are `rax/rdx` only
     RegMask regmap(Node* n, u32 i) {
-        todo;
+        if(i == 0) return RegMask{0}; // ctrl input, never a register
+        switch(n->nt) {
+            case NodeType::BinOp: {
+                // inputs 1 and 2 are both GPR values
+                // input 1 is two-address (shares output), but mask is still RMASK
+                return RMASK;
+            }
+            case NodeType::UnOp:
+                return RMASK; // input 1 is the operand, destructive
+            case NodeType::Load: {
+                // input 1 = mem (no register), input 2 = ptr (GPR), input 3 = offset (GPR)
+                if(i == 1) return RegMask{0}; // memory edge
+                return RMASK; // ptr and offset need registers
+            }
+            case NodeType::Store: {
+                // input 1 = mem (no register), input 2 = ptr (GPR),
+                // input 3 = offset (GPR),      input 4 = val (GPR)
+                if(i == 1) return RegMask{0}; // memory edge
+                return RMASK;
+            }
+            case NodeType::AllocA: {
+                // input 1 = size (GPR), input 2 = mem (no register)
+                if(i == 2) return RegMask{0}; // memory edge
+                return RMASK;
+            }
+            case NodeType::Ret: {
+                // input 0 = ctrl (handled above), input 1 = return value
+                // On x86-64, return value goes in RAX
+                if(i == 1) return RegMask{bRAX};
+                return RegMask{0};
+            }
+            case NodeType::Phi:
+                // memory phis: no register for any input
+                if(n->type->ttype == TypeT::Mem) return RegMask{0};
+                return RMASK;
+            case NodeType::Split:
+                return RMASK; // input 1 is the value being copied
+            default:
+                return RegMask{0};
+        }
     }
     RegMask outregmap(Node* n) {
-        todo;
+        switch(n->nt) {
+            case NodeType::BinOp:
+            case NodeType::UnOp:
+            case NodeType::Const:
+            case NodeType::Load:
+            case NodeType::AllocA: // produces a pointer
+            case NodeType::Split:
+                return WMASK;
+            
+            case NodeType::Phi:
+                // memory phis don't need a register
+                return n->type->ttype == TypeT::Mem ? RegMask{0} : WMASK;
+
+            case NodeType::Proj:
+                // ctrl projections and memory projections don't need a register
+                if(n->nt == NodeType::CtrlProj) return RegMask{0};
+                return n->type->ttype == TypeT::Mem ? RegMask{0} : WMASK;
+
+            default:
+                return RegMask{0};
+        }
     }
     // is clone = cheaper to recreate than to spill
     bool is_clone(Node* n) {
-        todo;
+        return n->nt == NodeType::Const;
     }
     u32 two_address(Node* n) {
-        todo;
+        if(n->nt == NodeType::BinOp) return 1; // lhs must share output reg
+        if(n->nt == NodeType::Store) return 0; // no output register at all
+        if(n->nt == NodeType::UnOp)  return 1; // unary ops are also destructive on x86
+        return 0;
     }
+    // are "symmetric"
     bool commutes(Node* n) {
-        todo;
+        if(n->nt != NodeType::BinOp) return false;
+        NodeBinOp* b = (NodeBinOp*) n;
+        switch(b->op) {
+            case Op::Add:
+            case Op::Mul:
+            case Op::BitAnd:
+            case Op::BitOr:
+            case Op::BitXor:
+            case Op::Eq:
+            case Op::Neq:
+                return true;
+            default:
+                return false;
+        }
+    }
+    bool is_mach(Node* n) {
+        switch(n->nt) {
+            case NodeType::BinOp:
+            case NodeType::UnOp:
+            case NodeType::Const:
+            case NodeType::Load:
+            case NodeType::Store:
+            case NodeType::AllocA:
+                return true;
+            default:
+                return false;
+        }
+    }
+    Node* copy_node(Node* n) {
+        assert(n->nt == NodeType::Const); // only "is_clone" allowed, which is just Const for now
+        NodeConst* node = (NodeConst*)n;
+        return NodeConst::create(node->val);
     }
 };
 
@@ -143,10 +250,10 @@ namespace encoding {
     }
 
     u8 modrm(AddrMode mod, u8 reg, u8 rm) {
-        return (mod << 6) | ((reg & 0b111) << 3) | rm & 0b111;
+        return (mod << 6) | ((reg & 0b111) << 3) | (rm & 0b111);
     }
 
     u8 sib(u8 scale, u8 index, u8 base) {
-        return (scale << 6) | ((index & 0b111) << 3) | base & 0b111;
+        return (scale << 6) | ((index & 0b111) << 3) | (base & 0b111);
     }
 };

@@ -14,4 +14,3 @@
 #include "node/compute.h"
 #include "node/peephole.h"
 #include "node/idealize.h"
-#include "node/x86.h"

@@ -582,3 +582,23 @@ struct NodeScope {
         }
     }
 };
+
+struct NodeSplit {
+    // self.input = [ctrl, splitted value (mov'd)]
+    Node self;
+
+    static Node* create(Node* ctrl, Node* val) {
+        assert(ctrl != nullptr && ctrl->cfg());
+        assert(val != nullptr);
+        NodeSplit node = {
+            .self = Node::create(NodeType::Split)
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->push_inputs(ctrl, val);
+        // don't peephole; splits are inserted post-peephole during register allocation and should not be optimized further
+        return ptr;
+    }
+
+    CFGNode* ctrl() { return self.input[0]; }
+    Node* val() { return self.input[1]; }
+};

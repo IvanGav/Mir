@@ -180,7 +180,7 @@ struct HSet {
         }
 
         void skip_to_valid() {
-            while (index < hset->size && !hset->exists.has(index)) {
+            while (index < hset->size && !hset->exists[index]) {
                 ++index;
             }
         }

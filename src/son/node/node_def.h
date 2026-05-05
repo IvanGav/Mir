@@ -285,11 +285,14 @@ struct Node {
     }
 
     void remove_split() {
-        todo;
-        // CFGNode cfg = cfg0();
-        // cfg._outputs.remove(cfg._outputs.find(this));
-        // _inputs.set(0,null);
-        // if( _inputs._len > 1 ) subsume(in(1));
+        assert(this->nt == NodeType::Split);
+        // Unlink from the block's output list (CFG ordering)
+        CFGNode* cfg = this->ctrl();
+        cfg->output.remove_first_of(this);
+        this->input[0] = nullptr; // detach ctrl without killing it
+        // Replace all uses of this split with the value it was copying
+        assert(this->input.size > 1); // TODO in Simple, there's an if statement
+        this->subsume(this->input[1]);
     }
 
     // Preserve CFG use-ordering when killing

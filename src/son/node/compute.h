@@ -133,9 +133,12 @@ namespace node {
                 types[2] = type::pool.mem(node->mem()->type);
                 return type::pool.from_slice(Slice<Type*>::from_ptr(types, 3));
             }
+
+            case NodeType::Split: {
+                return n->input[1]->type;
+            }
             
-            case NodeType::Undefined:
-                printe("call compute on undefined node", n);
+            default:
                 panic;
         }
         unreachable;

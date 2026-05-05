@@ -15,6 +15,8 @@
 #include "compile/dot.h"
 #include "compile/graph_evaluator.h"
 
+#include "compile/reg_alloc.h"
+
 Str readFile(const char* path, mem::Arena& arena = default_arena) {
     std::ifstream infile(path);
     return str::clone_cstr(std::string(std::istreambuf_iterator<char>(infile), std::istreambuf_iterator<char>()).data(), arena);
@@ -67,4 +69,6 @@ int main(int argc, char* argv[]) {
     node::compute_idom();
     gcm::build((NodeStart*) START_NODE, (NodeStop*) STOP_NODE);
     std::cout << compile::dump(START_NODE);
+    RegAlloc ra = RegAlloc::create(&default_arena);
+    ra.allocate();
 }

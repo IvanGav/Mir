@@ -65,77 +65,13 @@ struct RegAlloc {
     Vec<LRG*> unify_lrgs = {};
     Vec<Node*> ns = {};
 
-    // -----------------------
     // Live ranges with self-conflicts or no allowed registers
     HSet<LRG*> failed {};
-    void fail(LRG* lrg) {
-        assert(lrg->is_leader());
-        failed.add(lrg);
-    }
-    bool success() { return failed.empty(); }
 
-    // -----------------------
-    // Define a new LRG, and assign n
-    LRG* create_lrg(Node* n) {
-        LRG* lrg = this->get_lrg(n);
-        if(lrg != nullptr) return lrg;
-        lrg = default_arena.push(LRG::create(lrg_num));
-        lrg_num++;
-        lrgs.add(n, lrg);
-        return lrg;
+    static RegAlloc create(mem::Arena* arena) {
+        return RegAlloc{ .lrgs = HMap<Node*,LRG*>::create(arena), .unify_lrgs = Vec<LRG*>::create(*arena), .ns = Vec<Node*>::create(*arena), .failed = HSet<LRG*>::create(*arena) };
     }
 
-    // LRG for n
-    LRG* get_lrg(Node* n) {
-        if(!lrgs.exists(n)) return nullptr;
-        LRG* lrg = lrgs[n];
-        LRG* lrg2 = lrg->find_leader();
-        if(lrg != lrg2)
-            lrgs.add(n, lrg2);
-        return lrg2;
-    }
-
-    // Find LRG for n->input[idx], and also map n to it
-    LRG* get_lrg_of_input(Node* n, u32 idx) {
-        LRG* lrg = this->get_lrg(n->input[idx]);
-        return this->union_with(lrg, n);
-    }
-
-    // Union any lrg for n with lrg and map to the union
-    LRG* union_with(LRG* lrg, Node* n) {
-        LRG* lrgn = lrgs[n];
-        LRG* lrg3 = lrg->union_with(lrgn);
-        lrgs.add(n, lrg3);
-        return lrg3;
-    }
-
-    // Force all unified to roll up; collect live ranges
-    void unify() {
-        unify_lrgs.clear();
-        unify_lrgs.resize(this->lrg_num);
-        for(HMap<Node*, LRG*>::Entry e : lrgs) {
-            if(!e.exists()) continue;
-            Node* n = e.key;
-            LRG* lrg = this->get_lrg(n);
-            unify_lrgs[lrg->lrg] = lrg;
-        }
-        // Remove unified lrgs from failed set also
-        for(LRG* lrg : failed) {
-            if(!lrg->is_leader()) {
-                LRG* lrg2 = lrg->find_leader();
-                failed.remove(lrg);
-                failed.add(lrg2);
-            }
-        }
-    }
-
-    u16 regnum(Node* n) {
-        LRG* lrg = this->get_lrg(n);
-        assert(lrg != nullptr); // not in Simple
-        return lrg->reg;
-    }
-
-    // -----------------------
     void allocate() {
         // in Simple, there's an entire for loop here to save registers when a function gets called. I, of course, don't have functions.
         // Cache reg masks for New and Call
@@ -171,7 +107,73 @@ struct RegAlloc {
             reg_alloc::color_ifg(this); // If colorable
     }
 
-    // -----------------------
+    void fail(LRG* lrg) {
+        assert(lrg->is_leader());
+        failed.add(lrg);
+    }
+    bool success() { return failed.empty(); }
+
+    // Define a new LRG, and assign n
+    LRG* create_lrg(Node* n) {
+        LRG* lrg = this->get_lrg(n);
+        if(lrg != nullptr) return lrg;
+        lrg = default_arena.push(LRG::create(lrg_num));
+        lrg_num++;
+        lrgs.add(n, lrg);
+        return lrg;
+    }
+
+    // LRG for n
+    LRG* get_lrg(Node* n) {
+        if(!lrgs.exists(n)) return nullptr;
+        LRG* lrg = lrgs[n];
+        LRG* lrg2 = lrg->find_leader();
+        if(lrg != lrg2)
+            lrgs.add(n, lrg2);
+        return lrg2;
+    }
+
+    // Find LRG for n->input[idx], and also map n to it
+    LRG* get_lrg_of_input(Node* n, u32 idx) {
+        LRG* lrg = this->get_lrg(n->input[idx]);
+        return this->union_with(lrg, n);
+    }
+
+    // Union any lrg for n with lrg and map to the union
+    LRG* union_with(LRG* lrg, Node* n) {
+        LRG* lrgn = nullptr;
+        if(lrgs.exists(n)) { lrgn = lrgs[n]; }
+        LRG* lrg3 = lrg->union_with(lrgn);
+        lrgs.add(n, lrg3);
+        return lrg3;
+    }
+
+    // Force all unified to roll up; collect live ranges
+    void unify() {
+        unify_lrgs.clear();
+        unify_lrgs.resize(this->lrg_num);
+        for(HMap<Node*, LRG*>::Entry e : lrgs) {
+            if(!e.exists()) continue;
+            Node* n = e.key;
+            LRG* lrg = this->get_lrg(n);
+            unify_lrgs[lrg->lrg] = lrg;
+        }
+        // Remove unified lrgs from failed set also
+        for(LRG* lrg : failed) {
+            if(!lrg->is_leader()) {
+                LRG* lrg2 = lrg->find_leader();
+                failed.remove(lrg);
+                failed.add(lrg2);
+            }
+        }
+    }
+
+    u16 regnum(Node* n) {
+        LRG* lrg = this->get_lrg(n);
+        assert(lrg != nullptr); // not in Simple
+        return lrg->reg;
+    }
+
     // Split conflicted live ranges.
     void split() {
         // In C2, all splits are handling in one pass over the program.  Here,
@@ -241,7 +243,7 @@ struct RegAlloc {
         while(!done) {
             done = true;
             for(Node* use : def->output)
-                if(use->nt == NodeType::MachineNode)
+                if(x86::is_mach(use))
                     for(u32 i = 1; i < use->input.size; i++)
                         if(use->input[i] == def)
                             done = this->put_into_reg_class(rclass, x86::regmap(use, i));
@@ -258,7 +260,7 @@ struct RegAlloc {
             // all uses by class to split
             for(u32 j = 0; j < def->output.size; j++) {
                 Node* use = def->output[j];
-                if(use->nt == NodeType::MachineNode && use != split) {
+                if(x86::is_mach(use) && use != split) {
                     // Check all use inputs for n, in case there's several
                     for(u32 i = 1; i < use->input.size; i++ )
                         // Find a def input, and check register class
@@ -304,7 +306,7 @@ struct RegAlloc {
                 if((use->nt == NodeType::Phi && 
                     !(use->ctrl()->nt == NodeType::Loop && use->input[2] == def && 
                     def->ctrl()->idepth() > use->ctrl()->idepth())) ||
-                    (use->nt == NodeType::MachineNode && x86::two_address(use) != 0 && use->input[x86::two_address(use)] == def)
+                    (x86::is_mach(use) && x86::two_address(use) != 0 && use->input[x86::two_address(use)] == def)
                 ) {
                     this->insert_before(use, use->input.index_of(def), lrg);
                 }
@@ -320,7 +322,7 @@ struct RegAlloc {
                 this->insert_before(def, 1, lrg);
             }
             // Split before two-address ops which extend the live range
-            if(def->nt == NodeType::MachineNode && x86::two_address(def) != 0)
+            if(x86::is_mach(def) && x86::two_address(def) != 0)
                 this->insert_before(def, x86::two_address(def), lrg);
         }
         return true;
@@ -359,7 +361,7 @@ struct RegAlloc {
             if(n->is_dead()) continue; // Some Clonable went dead by other spill changes
             // If this is a 2-address commutable op (e.g. AddX86, MulX86) and the rhs has only a single user,
             // commute the inputs... which chops the LHS live ranges' upper bound to just the RHS.
-            if(n->nt == NodeType::MachineNode && this->get_lrg(n) == lrg && x86::two_address(n) == 1 && x86::commutes(n) && n->input[2]->output.size == 1) {
+            if(x86::is_mach(n) && this->get_lrg(n) == lrg && x86::two_address(n) == 1 && x86::commutes(n) && n->input[2]->output.size == 1) {
                 mem::swap(n->input[1], n->input[2]); // swap 1 and 2 because.. idk, Simple
             }
 
@@ -367,7 +369,7 @@ struct RegAlloc {
                 // At loop boundary, or splitting in inner loop
                 (minl == maxl || n->ctrl()->loop_depth() <= minl)) {
                 // Cloneable constants will be cloned at uses, not after def
-                if(!(n->nt == NodeType::MachineNode && x86::is_clone(n)) &&
+                if(!(x86::is_mach(n) && x86::is_clone(n)) &&
                     // Single user is already a split adjacent
                     !(n->output.size == 1 && n->output[0]->nt == NodeType::Split && this->same_block_no_clobber(n->output[0])))
                     // Split after def in min loop nest
@@ -376,7 +378,7 @@ struct RegAlloc {
 
             // PhiNodes check all CFG inputs
             if(n->nt == NodeType::Phi) {
-                for(u32 i = 1; i < n->input.size; i++ )
+                for(u32 i = 1; i < n->input.size; i++)
                     // No split in front of a split
                     if(!(n->input[i]->nt == NodeType::Split) &&
                         // splitting in inner loop or at loop border
@@ -389,11 +391,11 @@ struct RegAlloc {
                     }
             } else {
                 // Others check uses
-                for(u32 i = 1; i < n->input.size; i++ ) {
+                for(u32 i = 1; i < n->input.size; i++) {
                     // This is a LRG use
                     // splitting in inner loop or at loop border
                     if(this->lrg_same(n->input[i], lrg) &&
-                        (minl == maxl || (n->input[i]->nt == NodeType::MachineNode && x86::is_clone(n->input[i])) || n->ctrl()->loop_depth() <= minl))
+                        (minl == maxl || (x86::is_mach(n->input[i]) && x86::is_clone(n->input[i])) || n->ctrl()->loop_depth() <= minl))
                         // Split before in this block
                         this->insert_before(n, i, lrg, false);
                 }
@@ -425,14 +427,14 @@ struct RegAlloc {
         if(d < minl) {
             if(cfg->ctrl()->nt == NodeType::Loop && ((NodeRegion*)(cfg->ctrl()))->entry() == cfg) {
                 CFGNode* loop = cfg->ctrl();
-                for(u32 i = cfg->output.size - 2; i >= 0; i--) { // TODO why in reverse..??
+                for(i32 i = cfg->output.size - 2; i >= 0; i--) {
                     Node* out = cfg->output[i];
                     if(n == out) {
                         // Treat n as being "in the loop"
                         d = loop->loop_depth(); 
                         break;
                     }
-                    if(!((out->nt == NodeType::MachineNode && x86::is_clone(out)) || out->nt == NodeType::Split))
+                    if(!((x86::is_mach(out) && x86::is_clone(out)) || out->nt == NodeType::Split))
                         break; // Treat b as "normal", out of loop
                 }
             }
@@ -448,6 +450,8 @@ struct RegAlloc {
     void find_all_lrg(LRG* lrg) {
         ns.clear();
         u32 wd = 0;
+        assert(lrg->n_input != nullptr);
+        assert(lrg->n_output != nullptr);
         ns.push(lrg->n_input);
         ns.push(lrg->n_output);
         while(wd < ns.size) {
@@ -470,7 +474,7 @@ struct RegAlloc {
         CFGNode* cfg = n->nt == NodeType::Phi ? n->ctrl()->ctrl(i) : n->ctrl();
         // Def is a split ?
         if(skip && def->nt == NodeType::Split) {
-            bool single_reg = n->nt == NodeType::MachineNode && x86::regmap(n,i).is_size_1();
+            bool single_reg = x86::is_mach(n) && x86::regmap(n,i).is_size_1();
             // Same block, multiple registers, split is only used by n,
             // assume this is good enough and do not split again.
             if(cfg == def->ctrl() && def->output.size == 1 && !single_reg)
@@ -486,7 +490,7 @@ struct RegAlloc {
     void insert_after_and_replace(Node* split, Node* def, bool must) {
         split->insert_after(def);
         if(split->input.size > 1) split->set_input(1, def); // TODO what is this, once again..???
-        for(u32 j = def->output.size - 1; j >= 0; j--) { // TODO why reverse once again?
+        for(i32 j = def->output.size - 1; j >= 0; j--) {
             Node* use = def->output[j];
             if(use == split) continue; // Skip self
             // Can we avoid a split of a split?  'this' split is used by another split in the same block.
@@ -494,31 +498,66 @@ struct RegAlloc {
                 continue;
             u32 idx = use->input.index_of(def);
             use->set_input_ordered(idx, split);
-            if(j < def->output.size) j++;
+            if(j < (i32)(def->output.size)) j++;
         }
     }
 
     Node* make_split(Node* def, LRG* lrg) {
-        todo;
-        // Node* split = def->nt == NodeType::MachineNode && def->is_clone()
-        //     ? def->copy()
-        //     : _code._mach.split(kind,round,lrg); // TODO this tbh
-        // this->lrgs.add(split, lrg);
-        // return split;
+        Node* split = x86::is_mach(def) && x86::is_clone(def) ? x86::copy_node(def) : NodeSplit::create(def->ctrl(), def);
+        this->lrgs.add(split, lrg);
+        return split;
     }
     // returns a NodeSplit
     Node* make_split(LRG* lrg) {
-        todo;
-        // Node* split = _code._mach.split(lrg);
-        // lrgs.add(split,lrg);
-        // return split;
+        // version without a known def yet; ctrl and val set later by insert_before/insert_after_and_replace
+        // create with placeholders — caller is responsible for setting inputs
+        assert(lrg->n_input != nullptr);
+        Node* def = (Node*) lrg->n_input;
+        Node* split = NodeSplit::create(def->ctrl(), def);
+        lrgs.add(split, lrg);
+        return split;
     }
 
-
-    // -----------------------
     // POST PASS: Remove empty spills that biased-coloring made
     void post_color() {
-        todo;
+        // TODO_AI done by Claude; later, make sure it's correct
+        for(CFGNode* bb : node::cfgrp) {
+            // Walk outputs in forward order; use index because we may remove entries
+            for(i32 j = 0; j < (i32)bb->output.size; j++) {
+                Node* n = bb->output[j];
+
+                // Only care about splits
+                if(n->nt != NodeType::Split) continue;
+
+                // n is a Split: input[1] is the value being split (the def)
+                // After coloring, check if the split got the same register as its input
+                LRG* split_lrg = this->get_lrg(n);
+                LRG* def_lrg   = this->get_lrg(n->input[1]);
+                assert(split_lrg != nullptr && def_lrg != nullptr);
+
+                u16 split_reg = split_lrg->reg;
+                u16 def_reg = def_lrg->reg;
+
+                // Try to bypass a chain of same-block splits before deciding
+                if(split_reg != def_reg) {
+                    this->split_bypass(bb, (u32)j, n, split_reg);
+                    // Re-read in case bypass updated input[1]
+                    def_reg = this->get_lrg(n->input[1])->reg;
+                }
+
+                if(split_reg == def_reg) {
+                    // Split is a no-op move: same register in and out, remove it
+                    n->remove_split();
+                    j--; // recheck this index, since output shrunk
+                    continue;
+                }
+
+                // Split is real: count it
+                splills++;
+                spill_scaled += (1 << (bb->loop_depth() * 3));
+            }
+        }
+    }
         // u32 max_reg = U32_MAX;
         // // For all ops
         // for(CFGNode* bb : node::cfgrp) {
@@ -556,7 +595,6 @@ struct RegAlloc {
         //         assert _spillScaled >= 0;
         //     }
         // }
-    }
 
     bool split_bypass(CFGNode* bb, u32 j, Node* lo, u32 defreg) {
         // Attempt to bypass split
@@ -588,13 +626,13 @@ struct RegAlloc {
         u32 defreg = this->get_lrg(def)->reg;
         if(defreg == U32_MAX) defreg = this->get_lrg(def)->mask.first_reg();
         if(defreg == U32_MAX) return false; // no allowed registers -> clobbered
-        for(u32 idx = cfg->output.index_of(split) - 1; idx >= 0; idx--) { // TODO i'm tired
+        for(i32 idx = cfg->output.index_of(split) - 1; idx >= 0; idx--) {
             Node* n = cfg->output[idx];
             if(n == def) return true; // No clobbers
             if(this->get_lrg(n) == this->get_lrg(def)) return false; // Self conflict
             if(this->get_lrg(n) != nullptr && this->get_lrg(n)->reg == defreg)
                 return false; // Clobbered
         }
-        todo;
+        panic;
     }
 };

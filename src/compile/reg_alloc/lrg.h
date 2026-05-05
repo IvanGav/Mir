@@ -39,7 +39,7 @@ struct LRG {
 
     // A sample MachNode def in the live range
     Node* n_input, *n_output;
-    u16 uidx; // n_output input TODO ??????
+    u16 uidx; // n_output input TODO ??
 
     // Some splits used in biased coloring
     Node* split_input, *split_output;
@@ -87,15 +87,23 @@ struct LRG {
 
     // Union `this` and `lrg`, keeping the lower numbered `lrg`.
     // Includes a number of fast-path cutouts.
+    // return the leader (i think)
     LRG* union_with(LRG* lrg) {
         assert(this->is_leader());
         if(lrg == nullptr) return this;
         lrg = lrg->find_leader();
         if(lrg == this) return this;
-        return this->lrg < lrg->lrg ? this->merge_lrg(lrg) : lrg->merge_lrg(this);
+        if(this->lrg < lrg->lrg) {
+            this->merge_lrg(lrg);
+            return this;
+        }
+        else {
+            lrg->merge_lrg(this);
+            return lrg;
+        }
     }
     // Union `this` and `lrg`, folding together all stats.
-    LRG* merge_lrg(LRG* lrg) {
+    void merge_lrg(LRG* lrg) {
         // Set union-find leader
         lrg->leader = this;
         // Fold together stats
@@ -105,7 +113,7 @@ struct LRG {
             if(this->n_input != lrg->n_input ) this->multi_input = true;
             if(this->input_count == 0)
                 this->n_input = lrg->n_input;
-            else if(this->n_input == this->n_input)
+            else if(this->n_input == lrg->n_input)
                 this->input_count--;
         }
         this->input_count += lrg->input_count;
@@ -118,7 +126,7 @@ struct LRG {
             if(this->n_output != lrg->n_output) this->multi_output = true;
             if(this->output_count == 0) {
                 this->n_output = lrg->n_output;
-                this->uidx == lrg->uidx;
+                this->uidx = lrg->uidx;
             } else if(this->n_output == lrg->n_output) {
                 this->output_count--;
             }
@@ -132,7 +140,6 @@ struct LRG {
 
         // Fold together masks
         this->mask = this->mask & lrg->mask;
-        return this;
     }
 
     // TODO what the heck is this doing exactly?
@@ -141,28 +148,24 @@ struct LRG {
     }
 
     // Record any Mach def for spilling heuristics
-    LRG* mach_input(Node* input, bool size1) {
-        todo; // what is size1 even supposed to.. mean?
+    void mach_input(Node* input, bool is_size_1) {
         if(n_input != nullptr && n_input != input) multi_input = true;
-        if(n_input == nullptr || size1) n_input = input;
-        if(size1) input_count++;
+        if(n_input == nullptr || is_size_1) n_input = input;
+        if(is_size_1) input_count++;
         if(input->nt == NodeType::Split)
             split_input = this->deep_split(split_input, input);
-        return this;
     }
 
     // Record any Mach use for spilling heuristics
-    LRG* mach_output(Node* output, u16 uidx, bool size1) {
+    void mach_output(Node* output, u16 uidx, bool is_size_1) {
         if(n_output != nullptr && n_output != output) multi_output = true;
-        if(n_output == nullptr || size1) {
+        if(n_output == nullptr || is_size_1) {
             n_output = output;
-            uidx = uidx;
+            this->uidx = uidx;
         }
-        if(size1) output_count++;
-        todo;
+        if(is_size_1) output_count++;
         if(output->nt == NodeType::Split)
             split_output = this->deep_split(split_output, output);
-        return this;
     }
 
     bool has_split() { return split_input != nullptr || split_output != nullptr; }

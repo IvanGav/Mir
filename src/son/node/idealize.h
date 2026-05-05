@@ -109,8 +109,7 @@ namespace node {
             case NodeType::AllocA:
                 return nullptr; // TODO
             
-            case NodeType::Undefined:
-                printe("call idealize on undefined node", n);
+            default:
                 panic;
         }
         unreachable;
