@@ -8,6 +8,7 @@
 namespace gcm {
     void schedule_early(NodeStart* start); // forward decl
     void schedule_late(NodeStop* start); // forward decl
+    void order_block(CFGNode* bb); // forward decl
 
     BitSet anti_deps{.arena=&default_arena}; // marked CFG nodes (by CFGNode::cfgid) are visited on the path lca->START for some load/store node when computing its anti-dependencies
 
@@ -22,6 +23,49 @@ namespace gcm {
     void build(NodeStart* start, NodeStop* stop) {
         gcm::schedule_early(start);
         gcm::schedule_late(stop);
+        for(CFGNode* cfg : node::cfgrp) {
+            gcm::order_block(cfg);
+        }
+    }
+
+    // Recursive DFS topological sort for same-block nodes
+    // 'ready' means all same-block inputs already in `ordered`
+    void visit_block(BitSet& visited, Vec<Node*>& ordered, CFGNode* bb, Node* n) {
+        if(visited[n->uid]) return;
+        if(n->cfg()) return; // don't recurse into other blocks
+        if(n->ctrl() != bb) return; // not in this block
+        visited.set(n->uid);
+        // Visit all same-block inputs first
+        for(Node* inp : n->input) {
+            if(inp == nullptr) continue;
+            if(inp->cfg()) continue;
+            if(inp->ctrl() == bb)
+                gcm::visit_block(visited, ordered, bb, inp);
+        }
+        ordered.push(n);
+    }
+
+    // Order nodes within each basic block topologically.
+    // Fills bb->output in-place with a valid linear order.
+    // TODO_AI note, Claude wrote the main algorithm for this,.. not that it's particularly hard, i just don't have the time
+    void order_block(CFGNode* bb) {
+        mem::Arena scratch = mem::Arena::create(1 MB);
+        Vec<Node*> ordered = Vec<Node*>::create(scratch);
+        BitSet visited { .arena = &scratch };
+
+        // Seed with all nodes in this block
+        Vec<Node*> old_outputs = bb->output.clone(&scratch); // copy bb->output
+        for(Node* n : old_outputs)
+            gcm::visit_block(visited, ordered, bb, n);
+
+        // Replace bb->output with ordered list
+        bb->output.clear();
+        for(Node* n : ordered)
+            bb->output.push(n);
+        // Re-add the CFG successors at the end (they're in output too)
+        for(Node* n : old_outputs)
+            if(n->cfg())
+                bb->output.push(n);
     }
 
     /* schedule early */

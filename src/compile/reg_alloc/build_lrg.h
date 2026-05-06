@@ -27,8 +27,12 @@ namespace reg_alloc {
     }
     
     bool build_lrg(RegAlloc* alloc) {
-        for(Node* bb : node::cfgrp)
+        u32 DEBUG_1 = 0;
+        for(Node* bb : node::cfgrp) {
+            u32 DEBUG_2 = 0;
+            DEBUG_1++;
             for(Node* n : bb->output) {
+                DEBUG_2++;
                 if(n->nt == NodeType::Phi && n->type->ttype != TypeT::Mem) {
                     // All Phi inputs end up with the same LRG.
                     // Pass 1: find any pre-existing LRG, to avoid make-then-Union a LRG
@@ -53,8 +57,11 @@ namespace reg_alloc {
                     // Attempt to commute ops to keep live ranges compatible.
                     if(x86::commutes(n) && n->output.size == 1) {
                         u32 uidx = n->output[0]->input.index_of(n);
+                        if(!x86::is_mach(n->input[1])) { assert(alloc->get_lrg(n->input[1]) != nullptr); }
                         RegMask mask1 = x86::is_mach(n->input[1]) ? x86::outregmap(n->input[1]) : alloc->get_lrg(n->input[1])->mask;
+                        if(!x86::is_mach(n->input[2])) { assert(alloc->get_lrg(n->input[2]) != nullptr); }
                         RegMask mask2 = x86::is_mach(n->input[2]) ? x86::outregmap(n->input[2]) : alloc->get_lrg(n->input[2])->mask;
+                        if(!x86::is_mach(n->output[0])) { assert(alloc->get_lrg(n) != nullptr); }
                         RegMask masko = x86::is_mach(n->output[0]) ? x86::regmap(n->output[0], uidx) : alloc->get_lrg(n)->mask;
                         if(!mask1.overlaps(masko) && mask2.overlaps(masko))
                             mem::swap(n->input[1], n->input[2]);
@@ -65,7 +72,7 @@ namespace reg_alloc {
 
                     // Now, look in the opposite direction. How are incoming
                     // LRGs affected by this node: For all uses, make live lrgs
-                    for(u32 i = 1; i < n->input.size; i++)
+                    for(u32 i = 1; i < n->input.size; i++) {
                         if(n->input[i] != nullptr) {
                             LRG* lrg2 = alloc->get_lrg(n->input[i]);
                             if(lrg2 != nullptr) { // Anti-dep or other, no LRG
@@ -76,14 +83,20 @@ namespace reg_alloc {
                                     alloc->fail(lrg2); // Empty register mask, must split
                             }
                         }
+                    }
                 }
 
                 // MultiNodes have projections which set registers
-                if(n->nt == NodeType::Proj || n->nt == NodeType::CtrlProj) // TODO instanceof MultiNode 
-                    for(Node* proj : n->output)
-                        if(x86::is_mach(proj))
+                if(node::is_multinode(n)) {// nodes that have projections as their outputs
+                    for(Node* proj : n->output) {
+                        if(x86::is_mach(proj)) {
+                            printd(proj->nt);
                             reg_alloc::def_lrg(alloc, proj);
+                        }
+                    }
+                }
             }
+        }
 
         // Collect live ranges
         alloc->unify();

@@ -40,6 +40,10 @@ namespace node {
         unreachable;
     }
 
+    bool is_multinode(Node* n) {
+        return n->nt == NodeType::Start || n->nt == NodeType::If;
+    }
+
     Op op(Node* n) {
         switch(n->nt) {
             case NodeType::BinOp: {

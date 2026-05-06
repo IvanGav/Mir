@@ -50,6 +50,20 @@ struct BitSet {
         else { this->unset(num); }
     }
 
+    // may be extremely expensive, buuuttt
+    usize next_set_bit(usize start) {
+        for(usize i = start/(sizeof(bits)*8); i < size; i++) {
+            if(data[i] != 0) {
+                usize from = max(start, i*sizeof(bits)*8) % 8;
+                for(u32 j = from; j < sizeof(bits)*8; j++) {
+                    if((*this)[j]) return i*sizeof(bits)*8 + j;
+                }
+                panic;
+            }
+        }
+        return U32_MAX;
+    }
+
     /* Access Member Functions */
 
     bool operator[](usize i) const {

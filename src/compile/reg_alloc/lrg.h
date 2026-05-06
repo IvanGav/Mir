@@ -54,7 +54,7 @@ struct LRG {
     Vec<LRG*> adj;
 
     static LRG create(u16 lrg) {
-        return LRG { .lrg = lrg, .reg = Reg::UNDEFINED };
+        return LRG { .lrg = lrg, .reg = Reg::UNDEFINED, .mask = RMASK };
     }
 
     // More registers than neighbors
@@ -103,6 +103,7 @@ struct LRG {
         }
     }
     // Union `this` and `lrg`, folding together all stats.
+    // PRIVATE DON'T CALL FROM THE OUTSIDE!!!!!!!
     void merge_lrg(LRG* lrg) {
         // Set union-find leader
         lrg->leader = this;
@@ -170,7 +171,7 @@ struct LRG {
 
     bool has_split() { return split_input != nullptr || split_output != nullptr; }
     u8 size() { return mask.size(); }
-    bool size1() { return mask.is_size_1(); }
+    bool is_size_1() { return mask.is_size_1(); }
 
     void self_conflict(Node* input) {
         self_conflicts.add(input);

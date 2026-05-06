@@ -17,7 +17,7 @@ struct VariableScope {
 
     // Push a new scope to be innermost
     void push() {
-        scopes.push(ref(HMap<Str,T>::create(scopes.arena)));
+        scopes.push(ref(HMap<Str,T>::create(*scopes.arena)));
     }
 
     // Pop the innermost scope
@@ -27,7 +27,7 @@ struct VariableScope {
 
     T operator[](Str key) const {
         for(u32 i = scopes.size-1; i >= 0; i--) {
-            if(scopes[i].exists(key)) {
+            if(scopes[i].has(key)) {
                 return scopes[i][key];
             }
         }
@@ -37,7 +37,7 @@ struct VariableScope {
     T& operator[](Str key) {
         assert(scopes.size > 0);
         for(u32 i = scopes.size-1; i >= 0; i--) {
-            if(scopes[i].exists(key)) {
+            if(scopes[i].has(key)) {
                 return scopes[i][key];
             }
         }
@@ -51,7 +51,7 @@ struct VariableScope {
 
     bool contains(Str key) {
         for(u32 i = scopes.size-1; i >= 0; i--) {
-            if(scopes[i].exists(key)) {
+            if(scopes[i].has(key)) {
                 return true;
             }
         }

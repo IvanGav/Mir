@@ -10,6 +10,7 @@
 
 enum Reg : u16 {
     UNDEFINED = U16_MAX,
+    KILL = U16_MAX - 1,
     RAX = 0, // A = accumulator
     RBX = 1, // B = base
     RCX = 2, // C = counter
@@ -69,9 +70,15 @@ struct RegMask {
     bool overlaps(RegMask const& other) const {
         return (regs & other.regs) > 0;
     }
-    u32 first_reg() const {
-        if(regs == 0) { warn; return U32_MAX; } // no register available
-        return __builtin_ctzll(regs);
+    Reg first_reg() const {
+        if(regs == 0) { warn; return Reg::UNDEFINED; } // no register available
+        u8 count = __builtin_ctzll(regs); // Count Tailing Zeros Long Long
+        assert(count < 15); // temporary; when dealing with spills might be wrong, buuuttt
+        return (Reg)count;
+    }
+    bool test(u8 reg) {
+        assert(reg < 64);
+        return ((regs >> reg) & 1) != 0;
     }
 };
 
@@ -151,8 +158,7 @@ namespace x86 {
                 return n->type->ttype == TypeT::Mem ? RegMask{0} : WMASK;
 
             case NodeType::Proj:
-                // ctrl projections and memory projections don't need a register
-                if(n->nt == NodeType::CtrlProj) return RegMask{0};
+                // memory projections don't need a register
                 return n->type->ttype == TypeT::Mem ? RegMask{0} : WMASK;
 
             default:
@@ -194,6 +200,10 @@ namespace x86 {
             case NodeType::Load:
             case NodeType::Store:
             case NodeType::AllocA:
+            case NodeType::Proj:
+            case NodeType::Phi:
+            case NodeType::Split:
+            case NodeType::Ret: // takes input -> makes it a "machine" node
                 return true;
             default:
                 return false;
@@ -203,6 +213,10 @@ namespace x86 {
         assert(n->nt == NodeType::Const); // only "is_clone" allowed, which is just Const for now
         NodeConst* node = (NodeConst*)n;
         return NodeConst::create(node->val);
+    }
+    RegMask killmap(Node* n) {
+        assert(x86::is_mach(n));
+        return RegMask{0}; // no caller-save kills; no function calls; maybe needed for divide/modulo
     }
 };
 

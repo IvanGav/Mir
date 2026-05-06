@@ -64,6 +64,7 @@ struct HSet {
     }
 
     void remove(T& val) {
+        if(capacity == 0) return;
         u64 hash = hash::from(val);
         usize init_index = hash%capacity;
         usize index = init_index;
@@ -167,22 +168,30 @@ struct HSet {
         return cloned;
     }
 
+    Vec<T> to_vec(mem::Arena* new_arena = nullptr) {
+        if(new_arena == nullptr) new_arena = arena;
+        Vec<T> cloned = Vec<T>::create(*new_arena);
+        cloned.reserve(size);
+        for(T& item : *this) {
+            cloned.push(item);
+        }
+        return cloned;
+    }
+
     /* STL Compatibility */
 
-    // TODO this was coded by ChatGPT; I just glanced over it
     struct Iterator {
         HSet* hset;
         u32 index;
 
-        Iterator(HSet* hset, u32 index)
-            : hset(hset), index(index) {
-            skip_to_valid();
+        static Iterator create(HSet* hset, u32 index) {
+            Iterator i { .hset = hset, .index = index };
+            i.skip_to_valid();
+            return i;
         }
 
         void skip_to_valid() {
-            while (index < hset->size && !hset->exists[index]) {
-                ++index;
-            }
+            for(; index < hset->size && !hset->exists[index]; index++);
         }
 
         T& operator*() {
@@ -194,31 +203,25 @@ struct HSet {
         }
 
         Iterator& operator++() {
-            ++index;
+            index++;
             skip_to_valid();
             return *this;
         }
 
         Iterator operator++(int) {
             Iterator old = *this;
-            ++(*this);
+            (*this)++;
             return old;
         }
 
-        bool operator==(const Iterator& other) const {
-            return hset == other.hset && index == other.index;
-        }
-
-        bool operator!=(const Iterator& other) const {
-            return !(*this == other);
-        }
+        auto operator<=>(Iterator const& other) const = default;
     };
 
     Iterator begin() {
-        return Iterator(this, 0);
+        return Iterator::create(this, 0);
     }
 
     Iterator end() {
-        return Iterator(this, size);
+        return Iterator::create(this, size);
     }
 };

@@ -41,7 +41,7 @@ struct Evaluator {
     // methods
 
     u64 get_value(Node* node) {
-        if(cache_values.exists(node)) { return cache_values[node]; }
+        if(cache_values.has(node)) { return cache_values[node]; }
         switch(node->nt) {
             case NodeType::Const: {
                 NodeConst* c_node = (NodeConst*) node;

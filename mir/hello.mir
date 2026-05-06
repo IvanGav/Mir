@@ -1,17 +1,6 @@
-##
-fn main(arg: i64) {
-    let i: i64 = 1;
-
-    if(arg < 9) {
-        i = i + arg + 10;
-    } else {
-        i = i + arg;
-    };
-
-    return i + arg;
-}
-##
-
 let i: i64 = 1;
-if(arg < 9) { i = i + arg + 10; } else { i = i + arg; };
+#let arr: i64[10];
+#arr[1] = 10;
+#if(arg < 9) { i = i + arg + 10; } else { i = i + arg; };
+while(arg < 10) { arg = arg + 1; i = i + 1; };
 return i + arg;

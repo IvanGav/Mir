@@ -69,7 +69,7 @@ struct RegAlloc {
     HSet<LRG*> failed {};
 
     static RegAlloc create(mem::Arena* arena) {
-        return RegAlloc{ .lrgs = HMap<Node*,LRG*>::create(arena), .unify_lrgs = Vec<LRG*>::create(*arena), .ns = Vec<Node*>::create(*arena), .failed = HSet<LRG*>::create(*arena) };
+        return RegAlloc{ .lrgs = HMap<Node*,LRG*>::create(*arena), .unify_lrgs = Vec<LRG*>::create(*arena), .ns = Vec<Node*>::create(*arena), .failed = HSet<LRG*>::create(*arena) };
     }
 
     void allocate() {
@@ -80,12 +80,13 @@ struct RegAlloc {
         //         if(n->nt == NodeType::AllocA) n->cache_regs(this);
 
         // Top driver: repeated rounds of coloring and splitting.
-        u8 round = 0;
+        u32 round = 0;
         while(!this->graph_color()) {
             this->split();
-            if(round >= 7) // Really expect to be done soon
+            if(round >= 12) // Really expect to be done soon
                 panic;
             round++;
+            printd(round);
         }
         this->post_color(); // Remove no-op spills
     }
@@ -96,15 +97,23 @@ struct RegAlloc {
         lrg_num = 1;
         unify_lrgs.clear();
 
-        return
-            // Build Live Ranges
-            reg_alloc::build_lrg(this) && // if no hard register conflicts
-            // Build Interference Graph
-            reg_alloc::build_ifg(this) && // If no self conflicts or uncolorable
-            // Conservative coalesce copies
-            reg_alloc::coalesce(this) &&
-            // Color attempt
-            reg_alloc::color_ifg(this); // If colorable
+        bool build_lrg_success = reg_alloc::build_lrg(this);
+        if(!build_lrg_success) { printd(build_lrg_success); return false; }
+        bool build_ifg_success = reg_alloc::build_ifg(this);
+        if(!build_ifg_success) { printd(build_ifg_success); return false; }
+        bool coalesce_success = reg_alloc::coalesce(this);
+        if(!coalesce_success) { printd(coalesce_success); return false; }
+        bool color_ifg_success = reg_alloc::color_ifg(this);
+        if(!color_ifg_success) { printd(color_ifg_success); return false; }
+        return true;
+        //     // Build Live Ranges
+        //     reg_alloc::build_lrg(this) && // if no hard register conflicts
+        //     // Build Interference Graph
+        //     reg_alloc::build_ifg(this) && // If no self conflicts or uncolorable
+        //     // Conservative coalesce copies
+        //     reg_alloc::coalesce(this) &&
+        //     // Color attempt
+        //     reg_alloc::color_ifg(this); // If colorable
     }
 
     void fail(LRG* lrg) {
@@ -125,7 +134,7 @@ struct RegAlloc {
 
     // LRG for n
     LRG* get_lrg(Node* n) {
-        if(!lrgs.exists(n)) return nullptr;
+        if(!lrgs.has(n)) return nullptr;
         LRG* lrg = lrgs[n];
         LRG* lrg2 = lrg->find_leader();
         if(lrg != lrg2)
@@ -142,7 +151,7 @@ struct RegAlloc {
     // Union any lrg for n with lrg and map to the union
     LRG* union_with(LRG* lrg, Node* n) {
         LRG* lrgn = nullptr;
-        if(lrgs.exists(n)) { lrgn = lrgs[n]; }
+        if(lrgs.has(n)) { lrgn = lrgs[n]; }
         LRG* lrg3 = lrg->union_with(lrgn);
         lrgs.add(n, lrg3);
         return lrg3;
@@ -152,9 +161,8 @@ struct RegAlloc {
     void unify() {
         unify_lrgs.clear();
         unify_lrgs.resize(this->lrg_num);
-        for(HMap<Node*, LRG*>::Entry e : lrgs) {
-            if(!e.exists()) continue;
-            Node* n = e.key;
+        for(P<Node*, LRG*> e : lrgs) {
+            Node* n = e.a;
             LRG* lrg = this->get_lrg(n);
             unify_lrgs[lrg->lrg] = lrg;
         }
@@ -181,8 +189,10 @@ struct RegAlloc {
         // independently... which generally requires a full pass over the
         // program for each failing live range.  i.e., might be a lot of
         // passes.
-
-        for(LRG* lrg : failed)
+        mem::Arena scratch = mem::Arena::create(1 MB);
+        Vec<LRG*> ordered_fail = failed.to_vec(&scratch);
+        std::sort(ordered_fail.begin(), ordered_fail.end());
+        for(LRG* lrg : ordered_fail)
             this->split(lrg);
     }
 
@@ -294,7 +304,9 @@ struct RegAlloc {
 
     // Self conflicts require Phis (or two-address). Insert a split after every def.
     bool split_self_conflict(LRG* lrg) {
-        HSet<Node*>& conflicts = lrg->self_conflicts; // TODO sort??
+        mem::Arena scratch = mem::Arena::create(1 MB);
+        Vec<Node*> conflicts = lrg->self_conflicts.to_vec(&scratch);
+        std::sort(conflicts.begin(), conflicts.end());
 
         // For all conflicts
         for(Node* def : conflicts) {

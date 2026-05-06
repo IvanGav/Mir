@@ -95,6 +95,13 @@ struct Vec {
         }
     }
 
+    // set size to 0 and make sure that new elements get put into new memory
+    void invalidate() {
+        size = 0;
+        capacity = 0;
+        data = nullptr;
+    }
+
     /* Access Member Functions */
 
     T const& operator[](usize i) const {

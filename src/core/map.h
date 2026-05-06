@@ -6,28 +6,15 @@
 #include "pair.h"
 #include "vec.h"
 #include "hash.h"
+#include "bitset.h"
 
 #define MAX_HIT_COUNT 0b01111111
 
-// Hash Map (a bad implementation of one, at least)
-// keys must have == operator defined
 template <typename K, typename V>
 struct HMap {
-    struct Entry {
-        u8 flags; // 0bccccccce where e=exists flag, c=hit count bits (7 total)
-        // u64 key_hash; // calculating the hash is expensive
-        K key;
-        V value;
-
-        bool exists() const { return flags & 1; }
-        u8 hit_count() const { return flags >> 1; }
-        void increment_hit_count() { assert(this->hit_count() < (MAX_HIT_COUNT)); flags += 2; }
-        void decrement_hit_count() { assert(this->hit_count() > 0); flags -= 2; }
-        void replace_with(K key, V val) { this->flags |= 1; this->key = key; this->value = val; }
-        void destroy() { this->flags &= ~(1); }
-    };
-
-    Vec<Entry> map;
+    P<K,V>* set;
+    BitSet exists;
+    BitSet tombstone;
     u32 size;
     u32 capacity;
 
@@ -36,10 +23,15 @@ struct HMap {
 
     mem::Arena* arena;
 
-    static HMap create(mem::Arena* arena = &default_arena) {
+    static HMap create(mem::Arena& arena = default_arena) {
         HMap<K,V> m {};
-        m.arena = arena;
+        m.arena = &arena;
         return m;
+    }
+
+    void clear() {
+        exists.clear();
+        tombstone.clear();
     }
 
     bool empty() {
@@ -47,63 +39,64 @@ struct HMap {
     }
 
     f32 load_factor() {
-        return (f32) size / (f32) capacity;
+        return (f32) (size+1) / (f32) capacity;
     }
 
-    void add(K key, V val) {
-        size++;
+    void add(K& key, V& val) {
         if(this->load_factor() > 0.75) {
             this->resize();
         }
-        size--;
         u64 hash = hash::from(key);
         usize init_index = hash%capacity;
         usize index = init_index;
         // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
-        for(u32 attempts = 1; map[index].exists() && !(map[index].key == key); attempts++) {
+        for(u32 attempts = 1; tombstone[index] && !(exists[index] && set[index].a == key); attempts++) {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
-        if(!(map[index].exists())) {
+        if(!(exists[index])) {
             size++;
-            if(init_index != index) { map[init_index].increment_hit_count(); }
+            tombstone.set(index);
+            exists.set(index);
         }
-        map[index].replace_with(key, val);
+        set[index] = P{key,val};
+    }
+
+    void remove(K& key) {
+        if(capacity == 0) return;
+        u64 hash = hash::from(key);
+        usize init_index = hash%capacity;
+        usize index = init_index;
+        u32 attempts = 1;
+        // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
+        for(; tombstone[index] && !(exists[index] && set[index].a == key); attempts++) {
+            index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
+        }
+        // if(!(exists[index])) { std::cout << "Element does not exist in the set" << std::endl; panic; } // cannot remove an element that doesn't exist
+        if(exists[index]) {
+            exists.unset(index);
+        }
     }
 
     void resize() {
-        Vec<Entry> old_map = map;
-        this->map = Vec<Entry>::create(*arena); // create a new vec; it'd be difficult to rehash in-place
-        this->capacity = next_prime_size(capacity);
-        this->map.reserve(capacity);
-        this->map.size = map.capacity;
-        // copy all elements from the old map
-        for(Entry& e : old_map) {
-            // theoretically preserving element order may be beneficial? buuut
-            if(e.exists())
-                this->add(e.key, e.value);
-        }
-    }
+        if(arena == nullptr) { arena = &default_arena; }
+        mem::Arena scratch = mem::Arena::create(10 MB);
+        u32 old_capacity = capacity;
+        P<K,V>* old_set = set;
+        BitSet old_exists = exists.clone(&scratch);
 
-    void clear() {
-        for(Entry& e : map) {
-            e.flags = 0; // full reset
+        capacity = next_prime_size(capacity);
+        set = arena->alloc<P<K,V>>(capacity);
+        tombstone.clear();
+        exists.clear();
+
+        // copy all elements from the old set
+        for(u32 i = 0; i < old_capacity; i++) {
+            if(old_exists[i])
+                this->add(old_set[i].a, old_set[i].b);
         }
     }
 
     /* Access Member Functions */
-
-    V const& operator[](K key) const {
-        assert(capacity > 0);
-        u64 hash = hash::from(key);
-        usize init_index = hash%capacity;
-        usize index = init_index;
-        // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
-        for(u32 attempts = 1; map[index].exists() && !(map[index].key == key); attempts++) {
-            index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
-        }
-        assert(map[index].exists());
-        return map[index].value;
-    }
 
     V& operator[](K key) {
         assert(capacity > 0);
@@ -111,31 +104,43 @@ struct HMap {
         usize init_index = hash%capacity;
         usize index = init_index;
         // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
-        for(u32 attempts = 1; map[index].exists() && !(map[index].key == key); attempts++) {
+        for(u32 attempts = 1; tombstone[index] && !(exists[index] && set[index].a == key); attempts++) {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
-        assert(map[index].exists());
-        return map[index].value;
+        assert(exists[index]);
+        return set[index].b;
     }
 
-    bool exists(K key) const {
+    V* get(K key) {
+        assert(capacity > 0);
+        u64 hash = hash::from(key);
+        usize init_index = hash%capacity;
+        usize index = init_index;
+        // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
+        for(u32 attempts = 1; tombstone[index] && !(exists[index] && set[index].a == key); attempts++) {
+            index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
+        }
+        assert(exists[index]);
+        return &set[index].b;
+    }
+
+    bool has(K& key) const {
         if(capacity == 0) return false;
         u64 hash = hash::from(key);
         usize init_index = hash%capacity;
         usize index = init_index;
         // find the next available spot using quadratic probing, if initial is taken (or do nothing otherwise)
-        for(u32 attempts = 1; map[index].exists() && !(map[index].key == key); attempts++) {
+        for(u32 attempts = 1; tombstone[index] && !(exists[index] && set[index].a == key); attempts++) {
             index = (init_index + c1 * attempts + c2 * attempts * attempts)%capacity;
         }
-        return map[index].exists();
+        return exists[index];
     }
 
     // linear lookup time
-    Maybe<K> key_of(V val) const {
-        for(u32 i = 0; i < map.size; i++) {
-            Entry const& e = map[i];
-            if(e.exists() && e.value == val) {
-                return { .val = e.key, .here = true };
+    Maybe<K> key_of(V& val) const {
+        for(u32 i = 0; i < capacity; i++) {
+            if(exists[i] && set[i].b == val) {
+                return { .val = set[i].a, .here = true };
             }
         }
         return { .here = false };
@@ -144,19 +149,75 @@ struct HMap {
     /* Cloning */
 
     // if `new_arena` is `nullptr`, use the same arena as `this`
-    HMap<K, V> clone(mem::Arena* new_arena = nullptr) {
+    HMap<K,V> clone(mem::Arena* new_arena = nullptr) {
         if(new_arena == nullptr) new_arena = arena;
-        HMap<K, V> cloned {};
-        cloned.size = size;
-        cloned.capacity = capacity;
-        cloned.map = map.clone(new_arena);
+        HMap<K,V> cloned = HMap<K,V> {
+            .set = new_arena->alloc<P<K,V>>(capacity),
+            .exists = exists.clone(new_arena),
+            .tombstone = tombstone.clone(new_arena),
+            .size = size,
+            .capacity = capacity,
+            .arena = new_arena
+        };
+        mem::copy(cloned.set, set, capacity);
+        assert(cloned.arena != nullptr);
         return cloned;
     }
 
-    Entry* begin() {
-        return map.begin();
+    Vec<P<K,V>> to_vec(mem::Arena* new_arena = nullptr) {
+        if(new_arena == nullptr) new_arena = arena;
+        Vec<P<K,V>> cloned = Vec<P<K,V>>::create(*new_arena);
+        cloned.reserve(size);
+        for(P<K,V>& item : *this) {
+            cloned.push(item);
+        }
+        return cloned;
     }
-    Entry* end() {
-        return map.end();
+
+    /* STL Compatibility */
+
+    struct Iterator {
+        HMap* hmap;
+        u32 index;
+
+        static Iterator create(HMap* hmap, u32 index) {
+            Iterator i { .hmap = hmap, .index = index };
+            i.skip_to_valid();
+            return i;
+        }
+
+        void skip_to_valid() {
+            for(; index < hmap->size && !hmap->exists[index]; index++);
+        }
+
+        P<K,V>& operator*() {
+            return hmap->set[index];
+        }
+
+        P<K,V>* operator->() {
+            return &hmap->set[index];
+        }
+
+        Iterator& operator++() {
+            index++;
+            skip_to_valid();
+            return *this;
+        }
+
+        Iterator operator++(int) {
+            Iterator old = *this;
+            (*this)++;
+            return old;
+        }
+
+        auto operator<=>(Iterator const& other) const = default;
+    };
+
+    Iterator begin() {
+        return Iterator::create(this, 0);
+    }
+
+    Iterator end() {
+        return Iterator::create(this, size);
     }
 };
