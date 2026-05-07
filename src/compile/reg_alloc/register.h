@@ -9,8 +9,8 @@
 // None of this matters for me rn, since I don't even have functions
 
 enum Reg : u16 {
-    UNDEFINED = U16_MAX,
-    KILL = U16_MAX - 1,
+    UNDEFINED = 16,
+    KILL = 42,
     RAX = 0, // A = accumulator
     RBX = 1, // B = base
     RCX = 2, // C = counter
@@ -27,7 +27,11 @@ enum Reg : u16 {
     R13 = 13,
     R14 = 14,
     R15 = 15,
+};
 
+enum RegBit : u16 {
+    // UNDEFINED = U16_MAX,
+    // KILL = U16_MAX - 1,
     bRAX = 1<<RAX,
     bRBX = 1<<RBX,
     bRCX = 1<<RCX,
@@ -53,9 +57,9 @@ struct RegMask {
 
     // set bit count
     u8 size() const {
-        return (u8) __builtin_popcountll(regs); // TODO is.. that rightt???
+        return (u8) __builtin_popcountll(regs);
     }
-    bool is_size_1() { return (regs & -regs) == regs; }
+    bool is_size_1() { return this->size() == 1; } //(regs & -regs) == regs;
     bool is_empty() { return regs == 0; }
     RegMask operator&(RegMask const& other) const {
         return RegMask { .regs = u64(this->regs & other.regs) };
@@ -63,7 +67,8 @@ struct RegMask {
     RegMask operator-(RegMask const& other) const {
         return RegMask { .regs = u64(this->regs & ~other.regs) };
     }
-    RegMask operator-(u8 other) const {
+    RegMask operator-(Reg other) const {
+        assert(other < 64);
         return RegMask { .regs = u64(this->regs & ~(1 << other)) };
     }
     auto operator<=>(RegMask const&) const = default;
@@ -157,9 +162,21 @@ namespace x86 {
                 // memory phis don't need a register
                 return n->type->ttype == TypeT::Mem ? RegMask{0} : WMASK;
 
-            case NodeType::Proj:
-                // memory projections don't need a register
+            // case NodeType::Proj:
+            //     // memory projections don't need a register
+            //     return n->type->ttype == TypeT::Mem ? RegMask{0} : WMASK;
+
+            case NodeType::Proj: {
+                // projection off Start = function argument, fixed register per ABI
+                if(n->input[0]->nt == NodeType::Start) {
+                    // index 0 = ctrl, index 1 = first arg (RDI), index 2 = second (RSI), etc.
+                    return RegMask{bRDI};
+                    // NodeProj* p = (NodeProj*) n;
+                    // Reg arg_regs[] = { Reg::bRDI, Reg::bRSI, Reg::bRDX, Reg::bRCX };
+                    // if(p->index < 4) return RegMask{ arg_regs[p->index] }; // single forced register
+                }
                 return n->type->ttype == TypeT::Mem ? RegMask{0} : WMASK;
+            }
 
             default:
                 return RegMask{0};

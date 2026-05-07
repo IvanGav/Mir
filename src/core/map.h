@@ -187,7 +187,7 @@ struct HMap {
         }
 
         void skip_to_valid() {
-            for(; index < hmap->size && !hmap->exists[index]; index++);
+            for(; index < hmap->capacity && !hmap->exists[index]; index++);
         }
 
         P<K,V>& operator*() {
@@ -218,6 +218,6 @@ struct HMap {
     }
 
     Iterator end() {
-        return Iterator::create(this, size);
+        return Iterator::create(this, capacity);
     }
 };

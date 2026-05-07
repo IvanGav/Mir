@@ -120,7 +120,9 @@ struct RegAlloc {
         assert(lrg->is_leader());
         failed.add(lrg);
     }
-    bool success() { return failed.empty(); }
+    bool success() {
+        return failed.empty();
+    }
 
     // Define a new LRG, and assign n
     LRG* create_lrg(Node* n) {
@@ -178,7 +180,7 @@ struct RegAlloc {
 
     u16 regnum(Node* n) {
         LRG* lrg = this->get_lrg(n);
-        assert(lrg != nullptr); // not in Simple
+        if(lrg == nullptr) { warn; } // not in Simple
         return lrg->reg;
     }
 
@@ -192,8 +194,9 @@ struct RegAlloc {
         mem::Arena scratch = mem::Arena::create(1 MB);
         Vec<LRG*> ordered_fail = failed.to_vec(&scratch);
         std::sort(ordered_fail.begin(), ordered_fail.end());
-        for(LRG* lrg : ordered_fail)
+        for(LRG* lrg : ordered_fail) {
             this->split(lrg);
+        }
     }
 
     // Split this live range, top level heuristic
@@ -285,7 +288,6 @@ struct RegAlloc {
         }
         return true;
     }
-
 
     // Put use into a register class, perhaps adding a class or perhaps narrowing a class (and causing a repeat)
     bool put_into_reg_class(Vec<RegMask>& rclass, RegMask rmask) {
@@ -501,7 +503,7 @@ struct RegAlloc {
     // Replace uses of `def` with `split`, and insert `split` immediately after `def` in the basic block.
     void insert_after_and_replace(Node* split, Node* def, bool must) {
         split->insert_after(def);
-        if(split->input.size > 1) split->set_input(1, def); // TODO what is this, once again..???
+        if(split->input.size > 1) split->set_input(1, def);
         for(i32 j = def->output.size - 1; j >= 0; j--) {
             Node* use = def->output[j];
             if(use == split) continue; // Skip self
@@ -515,7 +517,7 @@ struct RegAlloc {
     }
 
     Node* make_split(Node* def, LRG* lrg) {
-        Node* split = x86::is_mach(def) && x86::is_clone(def) ? x86::copy_node(def) : NodeSplit::create(def->ctrl(), def);
+        Node* split = x86::is_mach(def) && x86::is_clone(def) ? x86::copy_node(def) : NodeSplit::create_unscheduled(def->ctrl(), def);
         this->lrgs.add(split, lrg);
         return split;
     }
@@ -525,7 +527,7 @@ struct RegAlloc {
         // create with placeholders — caller is responsible for setting inputs
         assert(lrg->n_input != nullptr);
         Node* def = (Node*) lrg->n_input;
-        Node* split = NodeSplit::create(def->ctrl(), def);
+        Node* split = NodeSplit::create_unscheduled(def->ctrl(), def);
         lrgs.add(split, lrg);
         return split;
     }

@@ -6,6 +6,9 @@ dev: src/.
 good: src/.
 	g++ src/main.cpp -std=c++20 -O3 -Wall
 
+compile: src/.
+	gcc -nostdlib -no-pie -o mir.out out.s
+
 graph:
 	dot -Tpng -O graph.gv
 

@@ -32,6 +32,7 @@ struct HSet {
     }
 
     void clear() {
+        size = 0;
         exists.clear();
         tombstone.clear();
     }
@@ -191,7 +192,7 @@ struct HSet {
         }
 
         void skip_to_valid() {
-            for(; index < hset->size && !hset->exists[index]; index++);
+            for(; index < hset->capacity && !hset->exists[index]; index++);
         }
 
         T& operator*() {
@@ -222,6 +223,6 @@ struct HSet {
     }
 
     Iterator end() {
-        return Iterator::create(this, size);
+        return Iterator::create(this, capacity);
     }
 };

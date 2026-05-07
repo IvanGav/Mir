@@ -17,6 +17,7 @@ typedef Node CFGNode; // semantically must be a cfg node
 namespace node {
     u64 hash(Node*);
     bool cfg(Node* n);
+    bool is_multinode(Node* n);
     Type* compute(Node* n);
     bool eq(Node* left, Node* right);
     bool glb(Node* n);
@@ -235,53 +236,48 @@ struct Node {
 
     // insert `this` immediately after `input` in the same basic block.
     void insert_after(Node* input) {
-        todo;
-        // CFGNode cfg = input.cfg0();
-        // int i = cfg._outputs.find(input)+1;
-        // if( cfg instanceof CallEndNode ) {
-        //     cfg = cfg.uctrl();  i=0;
-        // } else if( input.in(0) instanceof MultiNode ) {
-        //     assert i==0;
-        //     i = cfg._outputs.find(input.in(0))+1;
-        // }
+        CFGNode* cfg = input->ctrl();
+        u32 i = cfg->output.index_of(input) + 1;
+        if(node::is_multinode(input->ctrl())) { // TODO in simple, ->input[0] instead
+            assert(i == cfg->output.size+1);
+            i = cfg->output.index_of(input->ctrl()) + 1; // TODO in simple, ->input[0] instead
+        }
 
-        // while( cfg.out(i) instanceof PhiNode || cfg.out(i) instanceof CalleeSaveNode )  i++;
-        // cfg._outputs.insert(this,i);
-        // _inputs.set(0,cfg);
+        while(cfg->output[i]->nt == NodeType::Phi) i++;
+        cfg->output.insert(i, this);
+        this->input[0] = cfg;
     }
 
     // Insert this in front of use.in(uidx) with this, and insert this immediately before use in the basic block.
     void insert_before(Node* output, u32 uidx) {
-        todo;
-        // CFGNode cfg = use.cfg0();
-        // int i;
-        // if( use instanceof PhiNode phi ) {
-        //     cfg = phi.region().cfg(uidx);
-        //     if( cfg instanceof CProjNode && cfg.in(0) instanceof NeverNode nvr )
-        //         cfg = nvr.cfg0();
-        //     i = cfg.nOuts()-1;
-        // } else {
-        //     i = cfg._outputs.find(use);
-        // }
-        // cfg._outputs.insert(this,i);
-        // _inputs.set(0,cfg);
-        // if( _inputs._len > 1 && this instanceof SplitNode )
-        //     set_input_ordered(1,use.in(uidx));
-        // use.set_input_ordered(uidx,this);
+        CFGNode* cfg = output->ctrl();
+        u32 i;
+        if(output->nt == NodeType::Phi) {
+            cfg = output->ctrl()->ctrl(uidx);
+            assert(cfg->output.size > 0);
+            i = cfg->output.size - 1; // TODO why -1?
+        } else {
+            i = cfg->output.index_of(output);
+            assert(i != cfg->output.size);
+        }
+        cfg->output.insert(i, this);
+        this->input[0] = cfg;
+        if(this->input.size > 1 && this->nt == NodeType::Split)
+            set_input_ordered(1, output->input[uidx]);
+        output->set_input_ordered(uidx, this);
     }
 
     void set_input_ordered(u32 idx, Node* input) {
-        todo;
-        // // If old is dying, remove from CFG ordered
-        // Node old = in(idx);
-        // if( old!=null && old.nOuts()==1 ) {
-        //     CFGNode cfg = old.cfg0();
-        //     if( cfg!=null ) {
-        //         cfg._outputs.remove(cfg._outputs.find(old));
-        //         old._inputs.set(0,null);
-        //     }
-        // }
-        // set_input(idx,input);
+        // If old is dying, remove from CFG ordered
+        Node* old = this->input[idx];
+        if(old != nullptr && old->output.size == 1) {
+            CFGNode* cfg = old->ctrl();
+            if(cfg != nullptr) {
+                cfg->output.remove_first_of(old);
+                old->input[0] = nullptr;
+            }
+        }
+        this->set_input(idx, input);
     }
 
     void remove_split() {

@@ -16,6 +16,7 @@
 #include "compile/graph_evaluator.h"
 
 #include "compile/reg_alloc.h"
+#include "compile/assembly.h"
 
 Str readFile(const char* path, mem::Arena& arena = default_arena) {
     std::ifstream infile(path);
@@ -60,15 +61,29 @@ int main(int argc, char* argv[]) {
     Str dot = compile::dot(START_NODE);
     writeFile("./graph.gv", dot);
 
-    if(argc > 1) {
-        u64 program_input = atoi(argv[1]);
-        u64 output_value = Evaluator::create_and_run(START_NODE, program_input, 100000);
-        std::cout << "Program output: " << output_value << std::endl;
-    }
+    // if(argc > 1) {
+    //     u64 program_input = atoi(argv[1]);
+    //     u64 output_value = Evaluator::create_and_run(START_NODE, program_input, 100000);
+    //     std::cout << "Program output: " << output_value << std::endl;
+    // }
 
     node::compute_idom();
     gcm::build((NodeStart*) START_NODE, (NodeStop*) STOP_NODE);
     std::cout << compile::dump(START_NODE);
+
+    // for(CFGNode* bb : node::cfgrp) for(Node* out : bb->output) if(out->nt == NodeType::Const) //  && out->type->ttype == TypeT::Int
+    //             printd(((NodeConst*)out)->val);
+    // printd("done with right before regalloc");
+
     RegAlloc ra = RegAlloc::create(&default_arena);
     ra.allocate();
+
+    // for(CFGNode* bb : node::cfgrp) for(Node* out : bb->output) if(out->nt == NodeType::Const) //  && out->type->ttype == TypeT::Int
+    //             printd(((NodeConst*)out)->val);
+    // printd("done with right after regalloc");
+
+    std::cout << "__________\n";
+    std::cout << compile::dump(START_NODE);
+
+    x86::emit("out.s", &ra);
 }

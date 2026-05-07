@@ -80,6 +80,19 @@ struct Vec {
         size++;
     }
 
+    // insert `e` at `index`
+    void insert(usize index, T const& e) {
+        if(size == capacity) {
+            if(capacity == 0) this->reserve(8);
+            else this->reserve(capacity*2);
+        }
+        for(usize i = size; i > index; i--) {
+            data[i] = data[i-1];
+        }
+        data[index] = e;
+        size++;
+    }
+
     T pop() {
         assert(size > 0);
         size--;

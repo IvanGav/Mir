@@ -39,7 +39,7 @@ struct LRG {
 
     // A sample MachNode def in the live range
     Node* n_input, *n_output;
-    u16 uidx; // n_output input TODO ??
+    u16 uidx;
 
     // Some splits used in biased coloring
     Node* split_input, *split_output;

@@ -128,7 +128,7 @@ namespace reg_alloc {
             kills(alloc, bb);
 
         // Push live-sets backwards to priors in CFG.
-        if(bb->nt == NodeType::Region) {
+        if(bb->nt == NodeType::Region || bb->nt == NodeType::Loop) {
             for(u32 i = 1; i < bb->input.size; i++)
                 merge_live_out(alloc, bb, i);
         } else {
@@ -144,7 +144,7 @@ namespace reg_alloc {
             // Check for def-side self-conflict live ranges.  These must split,
             // and only happens during the first round a particular LRG splits.
             self_conflict(alloc, n, lrg);
-            tmp.remove(lrg); // Kill def // TODO CHECK HERE i was removing when tmp had capacity of 0... is that right?
+            tmp.remove(lrg); // Kill def
         }
 
         // Phis use and define the same live range, i.e. these LRGs already
@@ -274,7 +274,7 @@ namespace reg_alloc {
     // Merge TMP into bb's live-out set; if changes put bb on `work`
     void merge_live_out(RegAlloc* alloc, CFGNode* priorbb, u32 i) {
         CFGNode* bb = priorbb->ctrl(i);
-        if(bb == nullptr) return; // Start has no prior
+        if(bb == nullptr || bb == START_NODE) return; // Start has no prior
         if(!node::is_block_head(bb)) bb = bb->ctrl();
         //if( i==0 && !(bb instanceof StartNode) ) bb = bb.cfg0();
         assert(node::is_block_head(bb));
@@ -311,6 +311,7 @@ namespace reg_alloc {
         }
         for(u32 i = 1; i < lrgnum; i++) {
             BitSet& ifg_i = ifg[i];
+            if(ifg_i.size == 0) continue; // shouldn't be required, but also shouldn't hurt
             LRG* lrg0 = alloc->unify_lrgs[i];
             for(u32 lrg = ifg_i.next_set_bit(0); lrg != U32_MAX; lrg = ifg_i.next_set_bit(lrg+1)) {
                 LRG* lrg1 = alloc->unify_lrgs[lrg];
@@ -338,9 +339,14 @@ namespace reg_alloc {
     bool color_ifg(RegAlloc* alloc) {
         u32 maxlrg = alloc->unify_lrgs.size;
         u32 nlrgs = 0;
-        for(u32 i = 1; i < maxlrg; i++)
-            if(alloc->unify_lrgs[i] != nullptr)
+        for(u32 i = 1; i < maxlrg; i++) {
+            if(alloc->unify_lrgs[i] != nullptr) {
+                assert(alloc->unify_lrgs[i]->reg == Reg::UNDEFINED); // must enter coloring uncolored
+                assert(alloc->unify_lrgs[i]->mask.regs != 0);        // must have at least one allowed register
+                assert(alloc->unify_lrgs[i]->mask.regs <= U16_MAX);  // sanity: only 16 registers exist
                 nlrgs++;
+            }
+        }
 
         // Simplify
 
@@ -380,7 +386,7 @@ namespace reg_alloc {
             for(LRG* nlrg : lrg->adj) {
                 // Remove and compress out neighbor
                 nlrg->adj.remove_swap_first_of(lrg);
-                if(nlrg->adj.size == nlrg->mask.size()) { // TODO CHECK HERE
+                if(nlrg->adj.size == nlrg->mask.size()) {
                     // Neighbor is just exactly going trivial as 'lrg' is removed from IFG
                     // Find "j" position in the color_stack
                     u32 jx = swork;
@@ -397,10 +403,13 @@ namespace reg_alloc {
             sptr--;
             LRG* lrg = color_stack[sptr];
             if(lrg == nullptr) continue;
-            RegMask rmask = lrg->mask;
+            RegMask& rmask = lrg->mask; // TODO CHECK HERE
             // Walk neighbors and remove adjacent colors
             for(LRG* nlrg : lrg->adj) {
-                if(!nlrg->adj.contains(lrg)) nlrg->adj.push(lrg);
+                // if(!nlrg->adj.contains(lrg)) nlrg->adj.push(lrg); // less true to the Simple impl
+                assert(nlrg->adj[nlrg->adj.size] == lrg); // more true to the Simple impl
+                nlrg->adj.size++;
+
                 Reg reg = nlrg->reg;
                 if(reg != Reg::UNDEFINED) // Failed neighbors do not count
                     rmask = rmask - reg; // Remove neighbor from my choices
@@ -498,7 +507,7 @@ namespace reg_alloc {
         return 1000;
     }
 
-    Reg bias_color(RegAlloc* alloc, LRG* lrg, Reg reg, RegMask& mask) { // TODO CHECK HERE should `mask` be a reference arg?
+    Reg bias_color(RegAlloc* alloc, LRG* lrg, Reg reg, RegMask& mask) {
         if(mask.is_size_1()) return reg;
         // Check chain of splits up the def-chain.  Take first allocated
         // register, and if it's available in the mask, take it.
@@ -512,7 +521,7 @@ namespace reg_alloc {
 
             if(def != nullptr) {
                 Reg bias = bias_color(alloc, def, mask);
-                if(bias >= 0) return bias; // Good bias
+                if(bias != Reg::KILL && bias != Reg::UNDEFINED) return bias; // Good bias
                 if(bias == Reg::KILL) def = nullptr; // Kill this side, no more searching
                 else {
                     tidx = biasable(def);
@@ -522,14 +531,14 @@ namespace reg_alloc {
 
             if(use != nullptr) {
                 Reg bias = bias_color(alloc, use, mask);
-                if(bias >= 0) return bias; // Good bias
+                if(bias != Reg::KILL && bias != Reg::UNDEFINED) return bias; // Good bias
                 if(bias == Reg::KILL) use = nullptr; // Kill this side, no more searching
                 else if(biasable(use) == 0) use = nullptr;
             }
 
             if(def != nullptr) {
                 Reg bias = bias_color_neighbors(alloc, def, mask);
-                if(bias >= 0) return bias;
+                if(bias != Reg::KILL && bias != Reg::UNDEFINED) return bias;
                 // Advance def side
                 def = def->input[tidx];
                 if(alloc->get_lrg(def) == nullptr) def = nullptr;
@@ -537,7 +546,7 @@ namespace reg_alloc {
 
             if(use != nullptr) {
                 Reg bias = bias_color_neighbors(alloc, use, mask);
-                if(bias >= 0) return bias;
+                if(bias != Reg::KILL && bias != Reg::UNDEFINED) return bias;
                 use = use->output[0];
                 if(biasable(use) == 0) use = nullptr;
             }
@@ -556,7 +565,7 @@ namespace reg_alloc {
     // - good bias reg, take it & exit
     // - this path is cutoff; do not search here anymore
     // - advance this side
-    Reg bias_color(RegAlloc* alloc, Node* split, RegMask& mask) { // TODO CHECK HERE should `mask` be a reference arg?
+    Reg bias_color(RegAlloc* alloc, Node* split, RegMask& mask) {
         Reg bias = alloc->get_lrg(split)->reg;
         if(bias != Reg::UNDEFINED) {
             if(mask.test(bias)) return bias; // Good bias
@@ -568,9 +577,8 @@ namespace reg_alloc {
 
     // Check if we can match "split" color, or else trim "mask" to colors
     // "split" might get.
-    Reg bias_color_neighbors(RegAlloc* alloc, Node* split, RegMask& mask) { // TODO CHECK HERE should `mask` be a reference arg?
+    Reg bias_color_neighbors(RegAlloc* alloc, Node* split, RegMask& mask) {
         LRG* slrg = alloc->get_lrg(split);
-        // TODO CHECK HERE
         if(slrg->adj.size == 0) return Reg::UNDEFINED; // No trimming
 
         // Can I limit my own choices to valid neighbor choices?
@@ -623,7 +631,7 @@ namespace reg_alloc {
                         }
                     }
                     // Most constrained mask
-                    RegMask new_mask = v1->mask & v2->mask;
+                    RegMask new_mask = v1->mask & v2->mask; // TODO CHECK HERE should not mutate.. right?
                     // Check for capacity
                     if(v2->adj.size >= new_mask.size()) {
                         // Fails capacity, will not be trivial colorable

@@ -587,14 +587,14 @@ struct NodeSplit {
     // self.input = [ctrl, splitted value (mov'd)]
     Node self;
 
-    static Node* create(Node* ctrl, Node* val) {
+    // Use this during reg alloc — does NOT insert into ctrl->output
+    static Node* create_unscheduled(Node* ctrl, Node* val) { // TODO this can be a source of some bugs.. it shouldn't be integrated into the graph in a normal way, since it's done during regalloc, post scheduling...
         assert(ctrl != nullptr && ctrl->cfg());
         assert(val != nullptr);
-        NodeSplit node = {
-            .self = Node::create(NodeType::Split)
-        };
+        NodeSplit node = { .self = Node::create(NodeType::Split) };
         Node* ptr = (Node*) Node::node_arena->push(node);
-        ptr->push_inputs(ctrl, val);
+        ptr->input.push(ctrl);        // ctrl edge, but do NOT do ctrl->output.push(ptr) TODO SHOULD I?
+        ptr->push_input(val);         // val use-def edge is fine TODO OR IS IT???
         // don't peephole; splits are inserted post-peephole during register allocation and should not be optimized further
         return ptr;
     }
