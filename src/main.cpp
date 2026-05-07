@@ -42,7 +42,9 @@ int main(int argc, char* argv[]) {
     SCOPE_NODE->define("$1"_s, NodeConst::create(type::pool.mem(type::pool.int_const(0)))); // manually load the alias class $1
     BREAK_SCOPE_NODE = CONTINUE_SCOPE_NODE = nullptr;
 
-    Str src = readFile("mir/hello.mir");
+    Str src;
+    if(argc == 1) src = readFile("mir/hello.mir");
+    else src = readFile(argv[1]);
 
     Parser p = Parser::create(src);
 
@@ -85,5 +87,5 @@ int main(int argc, char* argv[]) {
     std::cout << "__________\n";
     std::cout << compile::dump(START_NODE);
 
-    x86::emit("out.s", &ra);
+    x86::emit("mir.s", &ra);
 }
