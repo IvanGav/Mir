@@ -16,7 +16,7 @@ namespace node {
     CFGNode* get_cfg_ctrl(CFGNode* n, u32 i = 0) {
         assert(node::cfg(n));
         switch(n->nt) {
-            case NodeType::Start: return n;
+            case NodeType::Start: return nullptr; // TODO check this is alright
             case NodeType::Stop: {
                 NodeStop* node = (NodeStop*) n;
                 assert(i <= node->ctrl_size());
@@ -43,8 +43,6 @@ namespace node {
                 assert(i == 0);
                 return node->ctrl();
             }
-
-            case NodeType::x86Jump: return n->input[0]; // effectively same as `if`; heresy, but i don't care
             default: unreachable;
         }
         unreachable;
@@ -69,8 +67,6 @@ namespace node {
                 NodeRegion* node = (NodeRegion*) n;
                 return node->ctrl_size();
             }
-
-            case NodeType::x86Jump: return 1; // effectively same as `if`
             default: unreachable;
         }
         unreachable;

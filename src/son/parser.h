@@ -150,8 +150,13 @@ struct Parser {
             
             case TokenType::VarDecl: {
                 Token var_name = t.next_token();
-                if(!this->read_token(":"_s)) { error = "Expected type when declaring a variable"_s; return nullptr; }
-                Type* declared_type = this->next_type();
+                Type* declared_type;
+                if(t.peek_non_white() == ':') {
+                    if(!this->read_token(":"_s)) { error = "Expected type when declaring a variable"_s; return nullptr; }
+                    declared_type = this->next_type();
+                } else {
+                    declared_type = type::pool.int_sized(8);
+                }
                 if(declared_type == nullptr) return nullptr;
                 Node* initializer_expr;
                 if(t.peek_non_white() == '=') {

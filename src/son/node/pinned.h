@@ -19,6 +19,9 @@ namespace node {
             case NodeType::Proj: // projects onto a specific ctrl node
             case NodeType::Phi: // merges variables of a speicifc region node
                 return true;
+            
+            case NodeType::Split: // inserted during reg_alloc post-scheduling
+                return true;
 
             // can move freely
             case NodeType::Load:
@@ -36,10 +39,6 @@ namespace node {
             case NodeType::Undefined:
                 printe("call pinned on undefined node", n);
                 panic;
-            
-
-            case NodeType::x86Jump: // effectively the same as `if`
-                return true;
         }
         unreachable;
     }

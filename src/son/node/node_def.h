@@ -17,6 +17,7 @@ typedef Node CFGNode; // semantically must be a cfg node
 namespace node {
     u64 hash(Node*);
     bool cfg(Node* n);
+    bool is_multinode(Node* n);
     Type* compute(Node* n);
     bool eq(Node* left, Node* right);
     bool glb(Node* n);
@@ -27,14 +28,12 @@ namespace node {
     CFGNode* get_cfg_ctrl(CFGNode* n, u32 i);
     u32 ctrl_size(CFGNode* n);
     Op op(Node* n);
-    bool is_load(Node* n);
-    Node* mem_of_load(Node* n);
-    u32 mem_alias_of_load(Node* n);
 };
 
 enum class NodeType {
     Undefined = 0,
     Scope,
+    Split, // When compiling, sometimes need to split live ranges; really shouldn't be in this "ideal" collection, but oh well
 
     // Control
     Start, Stop, Ret,
@@ -48,62 +47,6 @@ enum class NodeType {
     UnOp,
     Phi, Proj,
     Load, Store, AllocA,
-
-    // x86; I'm sorry that they're here.. I just don't have the time to come up with a neater solution
-    // R/I/M = Register/Immidiate/Memory
-    
-    // Jump; Control!!!!
-    x86Jump, // generic conditional jump; what operation is decided by `this->op`
-    // x86JumpZero, 
-    // x86JumpNZero,
-    // x86JumpOne, 
-    // x86JumpNOne,
-    // x86JumpEq, 
-    // x86JumpNEq, 
-    // x86JumpG, 
-    // x86JumpGEq, 
-    // x86JumpL, 
-    // x86JumpLEq,
-
-    // Set (use result of Cmp)
-    x86SetEq, 
-    x86SetNEq, 
-    x86SetG, 
-    x86SetGEq, 
-    x86SetL, 
-    x86SetLEq, // x86JumpZero, x86JumpNZero, x86JumpOne, x86JumpNOne,
-
-    // Arithmetic
-    x86AddR,
-    x86AddI,
-    x86AddM,
-    x86SubR,
-    x86SubI,
-    x86SubM,
-    x86MulR,
-    x86MulI,
-    x86MulM,
-    x86DivR,
-    x86DivM,
-
-    // Compare
-    x86CmpR,
-    x86CmpI,
-    x86CmpM,
-    // x86CmpMI,
-
-    // Stack
-    x86Push, 
-    x86Pop,
-
-    // Memory
-    x86Lea, // Load Effective Address
-    x86Load,
-    x86Store,
-
-    // Other
-    x86MovR,
-    x86MovI,
 };
 
 // Assume that *every* node is reachable from Start by *only* using `output` edges and from Stop by *only* using `input` edges
@@ -266,9 +209,6 @@ struct Node {
     Node* idealize() { return node::idealize(this); }
     Node* peephole() { return node::peephole(this); }
     bool pinned() { return node::pinned(this); }
-    bool is_load() { return node::is_load(this); }
-    Node* mem() { return node::mem_of_load(this); }
-    u32 mem_alias() { return node::mem_alias_of_load(this); }
 
     /* including ctrl getters and setters */
     
@@ -291,49 +231,81 @@ struct Node {
         assert(new_ctrl->cfg());
         this->set_input(0,new_ctrl);
     }
-    
-};
 
-namespace node {
-    NodeType x86_op_r(Op op) {
-        switch(op) {
-            case Op::Add: return NodeType::x86AddR;
-            case Op::Sub: return NodeType::x86SubR;
-            case Op::Mul: return NodeType::x86MulR;
-            case Op::Div: return NodeType::x86DivR;
-            case Op::Eq: case Op::Neq: case Op::Greater: case Op::GreaterEq: case Op::Less: case Op::LessEq: return NodeType::x86CmpR;
-            default: todo;
-        }
+    /* reg alloc related */
+
+    // insert `this` immediately after `input` in the same basic block.
+    void insert_after(Node* input) {
+        CFGNode* cfg = input->ctrl();
+        u32 i = cfg->output.index_of(input) + 1;
+        // if(node::is_multinode(input->ctrl())) { // TODO in simple, ->input[0] instead
+        //     // assert(i == cfg->output.size+1); // TODO this is present in Simple, (in a different way, but still)
+        //     assert(i <= cfg->output.size); // TODO this is the opposite of Simple's, but Claude says this..?
+        //     i = cfg->output.index_of(input->ctrl()) + 1; // TODO in simple, ->input[0] instead
+        //     assert(i != cfg->output.size); // TODO this is not in Simple, but cannot hurt to have
+        // }
+
+        // Claude says this is the right thing to do instead, in my case vvv
+        // if(node::is_multinode(input)) {
+        //     // input itself is a multinode head; skip past its projections
+        //     while(i < cfg->output.size && cfg->output[i]->nt == NodeType::Proj) i++;
+        // }
+
+        while(cfg->output[i]->nt == NodeType::Phi) i++;
+        cfg->output.insert(i, this);
+        this->input[0] = cfg;
     }
-    NodeType x86_op_i(Op op) {
-        switch(op) {
-            case Op::Add: return NodeType::x86AddI;
-            case Op::Sub: return NodeType::x86SubI;
-            case Op::Mul: return NodeType::x86MulI;
-            // case Op::Div: return NodeType::x86DivI;
-            case Op::Eq: case Op::Neq: case Op::Greater: case Op::GreaterEq: case Op::Less: case Op::LessEq: return NodeType::x86CmpI;
-            default: todo;
+
+    // Insert this in front of use.in(uidx) with this, and insert this immediately before use in the basic block.
+    void insert_before(Node* output, u32 uidx) {
+        CFGNode* cfg = output->ctrl();
+        u32 i;
+        if(output->nt == NodeType::Phi) {
+            cfg = output->ctrl()->ctrl(uidx-1); // ARGHHGHGHH
+            assert(cfg->output.size > 0);
+            i = cfg->output.size - 1; // TODO why -1?
+        } else {
+            i = cfg->output.index_of(output);
+            assert(i != cfg->output.size);
         }
+        cfg->output.insert(i, this);
+        this->input[0] = cfg;
+        if(this->input.size > 1 && this->nt == NodeType::Split)
+            set_input_ordered(1, output->input[uidx]);
+        output->set_input_ordered(uidx, this);
     }
-    NodeType x86_op_m(Op op) {
-        switch(op) {
-            case Op::Add: return NodeType::x86AddM;
-            case Op::Sub: return NodeType::x86SubM;
-            case Op::Mul: return NodeType::x86MulM;
-            case Op::Div: return NodeType::x86DivM;
-            case Op::Eq: case Op::Neq: case Op::Greater: case Op::GreaterEq: case Op::Less: case Op::LessEq: return NodeType::x86CmpM;
-            default: todo;
+
+    void set_input_ordered(u32 idx, Node* input) {
+        // If old is dying, remove from CFG ordered
+        Node* old = this->input[idx];
+        if(old != nullptr && old->output.size == 1) {
+            CFGNode* cfg = old->ctrl();
+            if(cfg != nullptr) {
+                cfg->output.remove_first_of(old);
+                old->input[0] = nullptr;
+            }
         }
+        this->set_input(idx, input);
     }
-    NodeType x86_set_op(Op op) {
-        switch(op) {
-            case Op::Eq: NodeType::x86SetEq;
-            case Op::Neq: NodeType::x86SetNEq;
-            case Op::Greater: NodeType::x86SetG;
-            case Op::GreaterEq: NodeType::x86SetGEq;
-            case Op::Less: NodeType::x86SetL;
-            case Op::LessEq: NodeType::x86SetLEq;
-            default: todo;
-        }
+
+    void remove_split() {
+        assert(this->nt == NodeType::Split);
+        // Unlink from the block's output list (CFG ordering)
+        CFGNode* cfg = this->ctrl();
+        cfg->output.remove_first_of(this);
+        this->input[0] = nullptr; // detach ctrl without killing it
+        // Replace all uses of this split with the value it was copying
+        assert(this->input.size > 1); // TODO in Simple, there's an if statement
+        this->subsume(this->input[1]);
     }
+
+    // Preserve CFG use-ordering when killing
+    // TODO not sure why it's even needed.. but i guess might as well
+    void kill_ordered() {
+        CFGNode* cfg = this->ctrl();
+        cfg->output.remove_first_of(this);
+        this->input[0] = nullptr;
+        this->kill();
+    }
+    
 };

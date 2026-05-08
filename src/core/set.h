@@ -31,6 +31,12 @@ struct HSet {
         return m;
     }
 
+    void clear() {
+        size = 0;
+        exists.clear();
+        tombstone.clear();
+    }
+
     bool empty() {
         return size == 0;
     }
@@ -59,6 +65,7 @@ struct HSet {
     }
 
     void remove(T& val) {
+        if(capacity == 0) return;
         u64 hash = hash::from(val);
         usize init_index = hash%capacity;
         usize index = init_index;
@@ -160,5 +167,62 @@ struct HSet {
         mem::copy(cloned.set, set, capacity);
         assert(cloned.arena != nullptr);
         return cloned;
+    }
+
+    Vec<T> to_vec(mem::Arena* new_arena = nullptr) {
+        if(new_arena == nullptr) new_arena = arena;
+        Vec<T> cloned = Vec<T>::create(*new_arena);
+        cloned.reserve(size);
+        for(T& item : *this) {
+            cloned.push(item);
+        }
+        return cloned;
+    }
+
+    /* STL Compatibility */
+
+    struct Iterator {
+        HSet* hset;
+        u32 index;
+
+        static Iterator create(HSet* hset, u32 index) {
+            Iterator i { .hset = hset, .index = index };
+            i.skip_to_valid();
+            return i;
+        }
+
+        void skip_to_valid() {
+            for(; index < hset->capacity && !hset->exists[index]; index++);
+        }
+
+        T& operator*() {
+            return hset->set[index];
+        }
+
+        T* operator->() {
+            return &hset->set[index];
+        }
+
+        Iterator& operator++() {
+            index++;
+            skip_to_valid();
+            return *this;
+        }
+
+        Iterator operator++(int) {
+            Iterator old = *this;
+            (*this)++;
+            return old;
+        }
+
+        auto operator<=>(Iterator const& other) const = default;
+    };
+
+    Iterator begin() {
+        return Iterator::create(this, 0);
+    }
+
+    Iterator end() {
+        return Iterator::create(this, capacity);
     }
 };

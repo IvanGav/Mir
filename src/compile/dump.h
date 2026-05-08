@@ -31,7 +31,7 @@ namespace compile {
             CFGNode* cfg = node::cfgrp[i];
             compile::dump_node(cfg, str);
             for(u32 i = 0; i < cfg->output.size; i++) {
-                if(cfg->output[i]->cfg()) continue;
+                if(cfg->output[i]->cfg()) { str.push_slice("\tc/"_s); compile::dump_node(cfg->output[i], str); continue; }
                 str.push('\t');
                 compile::dump_node(cfg->output[i], str);
             }

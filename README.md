@@ -3,12 +3,15 @@
 ## Compiling/Running
 
 - Compile: `make`
-  - `make good` to enable optimizations and exclude debug flags
-- Run: `./a.out [src file]`
+  - `make good` to enable optimizations and exclude debug flags (when compiling my code with g++, not in `mirc` compiler)
+- Run: `./mirc [src file]`
   - If no source file is specified, default is `mir/hello.mir`
   - `graph.gv` will automatically be generated, representing the graph of the program
-- Render abstract syntax graph: `dot -Tpng -O graph.gv`
+  - `mir.s` will automatically be generated, being the compiled assembly of the program
+- Render abstract syntax graph: `make graph` (`dot -Tpng -O graph.gv`)
   - Install `dot` with `sudo apt install graphviz`
+- Assemble the `mir.s`: `make assemble` (`gcc -nostdlib -no-pie -o mir.out mir.s`)
+  - Install `gcc` with `sudo apt install build-essential`
 
 ## Code hierarchy
 
@@ -17,7 +20,7 @@
 - `lang` - defines some language structures without any parsing or anything
 - `token` - lexer/tokenizer breaks up source code into tokens
 - `son` - parser into sea of nodes ast
-- `compile` - contains different compilation targets (current: `dot`)
+- `compile` - contains different "compilation targets" (and also `reg_alloc` for some reason =Ь)
 
 ## Features (planned, and may be completely changed)
 

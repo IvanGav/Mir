@@ -33,6 +33,10 @@ namespace type {
         unreachable;
     }
     Str to_str(Type* t) {
+        if(t == nullptr) {
+            warn;
+            return "nullptr"_s;
+        }
         assert(t != nullptr);
         switch (t->ttype) {
             case TypeT::Pure: {

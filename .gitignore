@@ -1,5 +1,8 @@
 .vscode/
-a.out
+mirc
+mir.out
 main
+*.s
 *.gv
 *.gv.png
+src/alt

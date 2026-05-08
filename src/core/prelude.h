@@ -58,9 +58,17 @@ typedef double f64;
 
 #define todo { std::cout << ("UNIMPLEMENTED\n"); assert(false); std::abort(); }
 
+#define warn { std::cout << "warn: " << __FILE__ << ":" << __LINE__ << "\n"; }
+
 #define ceil_div(num, denom) (num/denom + (num%denom != 0))
 
-#define printd(expr) std::cout << "--DEBUG " #expr ": " << (expr) << std::endl;
+#ifndef DONT_PRINTD
+#define printd(expr) { std::cout << "--DEBUG " #expr ": " << (expr) << std::endl; }
+#define logd(expr) { std::cout << "--DEBUG: " << expr << std::endl; }
+#else
+#define printd(expr) { }
+#define logd(expr) { }
+#endif
 
 #define printe(message, expr) std::cout << "--ERROR " message ": " << (expr) << std::endl;
 

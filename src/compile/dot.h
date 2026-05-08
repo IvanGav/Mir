@@ -130,6 +130,12 @@ namespace compile {
                 output.push_slice(str::cat(uid, " [label=\""_s, "alloca"_s, "\"];\n"_s));
                 break;
             }
+
+            case NodeType::Split: {
+                Str uid = str::from_int(n->uid);
+                output.push_slice(str::cat(uid, " [label=\""_s, "split"_s, "\"];\n"_s));
+                break;
+            }
             
             case NodeType::Undefined:
                 printe("call compile to dot on undefined node", n);
@@ -302,6 +308,15 @@ namespace compile {
                     str::from_int(node->ctrl()->uid), " -> "_s, uid, " [label=\"ptr\"];\n"_s,
                     str::from_int(node->mem()->uid), " -> "_s, uid, " [label=\"mem\"];\n"_s,
                     str::from_int(node->size()->uid), " -> "_s, uid, " [label=\"size\"];\n"_s
+                ));
+                break;
+            }
+
+            case NodeType::Split: {
+                NodeSplit* node = (NodeSplit*) n;
+                Str uid = str::from_int(n->uid);
+                output.push_slice(str::cat(
+                    str::from_int(node->val()->uid), " -> "_s, uid, ";\n"_s
                 ));
                 break;
             }

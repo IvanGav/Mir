@@ -36,8 +36,7 @@ namespace node {
                 return ln->val == rn->val;
             }
             
-            case NodeType::Undefined:
-                printe("call eq on undefined nodes", left);
+            default:
                 panic;
         }
         unreachable;

@@ -1,6 +1,5 @@
 // no optimizations please
 // #define NOOPTS
-#define DONT_PRINTD
 
 #include "core/prelude.h"
 #include "core/str.h"
@@ -19,25 +18,17 @@
 #include "compile/reg_alloc.h"
 #include "compile/assembly.h"
 
-#include "cmdarg.h"
+Str readFile(const char* path, mem::Arena& arena = default_arena) {
+    std::ifstream infile(path);
+    return str::clone_cstr(std::string(std::istreambuf_iterator<char>(infile), std::istreambuf_iterator<char>()).data(), arena);
+}
+
+void writeFile(const char* path, Str content) {
+    std::ofstream outfile(path);
+    outfile << content;
+}
 
 int main(int argc, char* argv[]) {
-
-    // Read cmd args
-    const char* src_name = get_str_arg_or_default(argv, "src", 's', "mir/hello.mir");
-    Str src = readFile(src_name);
-    if(src == ""_s) {
-        std::cout << "File " << src_name << "could not be opened." << std::endl;
-        return 0;
-    }
-    u32 eval_arg;
-    bool do_eval = false;
-    if(has_int_arg(argv, "eval", 'e')) {
-        do_eval = true;
-        eval_arg = get_int_arg(argv, "eval", 'e');
-    }
-
-    // set up the compiler
     mem::Arena node_arena = mem::Arena::create(10 MB);
     mem::Arena scope_arena = mem::Arena::create(10 MB);
     mem::Arena type_arena = mem::Arena::create(10 MB);
@@ -51,39 +42,42 @@ int main(int argc, char* argv[]) {
     SCOPE_NODE->define("$1"_s, NodeConst::create(type::pool.mem(type::pool.int_const(0)))); // manually load the alias class $1
     BREAK_SCOPE_NODE = CONTINUE_SCOPE_NODE = nullptr;
 
-    // Parse loop
+    Str src;
+    if(argc == 1) src = readFile("mir/hello.mir");
+    else src = readFile(argv[1]);
+
     Parser p = Parser::create(src);
+
     Node* n = nullptr;
     do {
         n = p.next_top_level_expr();
     } while(n != nullptr && !p.done());
     
-    // If src contained errors, print
     if(p.err()) {
-        usize line = p.t.get_cur_line_num();
-        std::cout << "error on line " << line << ": " << std::endl;
-        std::cout << p.error << std::endl;
-        return 0;
+        printd(p.error);
+        std::cout << "at:\n" << p.t.source.slice(p.t.at, 10) << std::endl;
     }
 
     SCOPE_NODE->pop();
 
     Str dot = compile::dot(START_NODE);
     writeFile("./graph.gv", dot);
-    std::cout << "wrote to ./graph.gv" << std::endl;
 
-    if(do_eval) {
-        u64 output_value = Evaluator::create_and_run(START_NODE, eval_arg, 100000);
+    if(argc == 3) {
+        u64 program_input = atoi(argv[2]);
+        u64 output_value = Evaluator::create_and_run(START_NODE, program_input, 100000);
         std::cout << "Program output: " << output_value << std::endl;
     } else {
         node::compute_idom();
         gcm::build((NodeStart*) START_NODE, (NodeStop*) STOP_NODE);
-        // std::cout << compile::dump(START_NODE);
+        std::cout << compile::dump(START_NODE);
+
         RegAlloc ra = RegAlloc::create(&default_arena);
         ra.allocate();
-        // std::cout << "__________\n";
+
+        std::cout << "__________\n";
         std::cout << compile::dump(START_NODE);
+
         x86::emit("mir.s", &ra);
-        std::cout << "wrote to ./mir.s" << std::endl;
     }
 }

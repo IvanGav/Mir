@@ -117,4 +117,4 @@ namespace mem {
     };
 };
 
-mem::Arena default_arena = mem::Arena::create(64 MB);
+mem::Arena default_arena = mem::Arena::create(256 MB);
