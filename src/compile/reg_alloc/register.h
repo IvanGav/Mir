@@ -150,13 +150,25 @@ namespace x86 {
     }
     RegMask outregmap(Node* n) {
         switch(n->nt) {
-            case NodeType::BinOp:
+            case NodeType::BinOp:// {
+                // switch(n->op()) {
+                    // case Op::Eq:
+                    // case Op::Neq:
+                    // case Op::Less:
+                    // case Op::Greater:
+                    // case Op::LessEq:
+                    // case Op::GreaterEq:
+                    //     return RegMask{0}; // no materialized boolean result // TODO is this right??
+                //     default:
+                //         return WMASK;
+                // }
+            // }
             case NodeType::UnOp:
             case NodeType::Const:
             case NodeType::Load:
             case NodeType::AllocA: // produces a pointer
             case NodeType::Split:
-                return WMASK;
+            return WMASK;
             
             case NodeType::Phi:
                 // memory phis don't need a register
@@ -236,7 +248,7 @@ namespace x86 {
     Node* copy_node(Node* n) {
         assert(n->nt == NodeType::Const); // only "is_clone" allowed, which is just Const for now
         NodeConst* node = (NodeConst*)n;
-        return NodeConst::create(node->val);
+        return NodeConst::create_unscheduled(n, node->val);
     }
     RegMask killmap(Node* n) {
         assert(x86::is_mach(n));

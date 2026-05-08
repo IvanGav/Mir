@@ -82,13 +82,10 @@ struct RegAlloc {
         // Top driver: repeated rounds of coloring and splitting.
         u32 round = 0;
         while(!this->graph_color()) {
-            printd("split");
             this->split();
-            printd("postsplit");
             if(round >= 12) // Really expect to be done soon
                 panic;
             round++;
-            printd(round);
         }
         this->post_color(); // Remove no-op spills
     }
@@ -98,6 +95,8 @@ struct RegAlloc {
         lrgs.clear();
         lrg_num = 1; // TODO stupid Simple ahh
         unify_lrgs.clear();
+
+        std::cout << "GRAPH COLOR CALLED" << std::endl;
 
         bool build_lrg_success = reg_alloc::build_lrg(this);
         if(!build_lrg_success) { printd(build_lrg_success); return false; }
@@ -133,6 +132,7 @@ struct RegAlloc {
         lrg = default_arena.push(LRG::create(lrg_num));
         lrg_num++;
         lrgs.add(n, lrg);
+        std::cout << "added " << n->nt << '(' << n->uid << ')' << " to lrg " << lrg->lrg << std::endl;
         return lrg;
     }
 
@@ -141,8 +141,10 @@ struct RegAlloc {
         if(!lrgs.has(n)) return nullptr;
         LRG* lrg = lrgs[n];
         LRG* lrg2 = lrg->find_leader();
-        if(lrg != lrg2)
+        if(lrg != lrg2) {
             lrgs.add(n, lrg2);
+            std::cout << "added " << n->nt << '(' << n->uid << ')' << " to lrg " << lrg2->lrg << std::endl;
+        }
         return lrg2;
     }
 
@@ -158,6 +160,7 @@ struct RegAlloc {
         if(lrgs.has(n)) { lrgn = lrgs[n]; }
         LRG* lrg3 = lrg->union_with(lrgn);
         lrgs.add(n, lrg3);
+        std::cout << "added " << n->nt << '(' << n->uid << ')' << " to lrg " << lrg3->lrg << std::endl;
         return lrg3;
     }
 
@@ -519,8 +522,10 @@ struct RegAlloc {
     }
 
     Node* make_split(Node* def, LRG* lrg) {
+        printd(def->nt);
         Node* split = x86::is_mach(def) && x86::is_clone(def) ? x86::copy_node(def) : NodeSplit::create_unscheduled(def->ctrl(), def);
         this->lrgs.add(split, lrg);
+        std::cout << "added split " << split->nt << '(' << split->uid << ')' << " to lrg " << lrg->lrg << std::endl;
         return split;
     }
     // returns a NodeSplit
@@ -531,6 +536,7 @@ struct RegAlloc {
         Node* def = lrg->n_input;
         Node* split = NodeSplit::create_unscheduled(def->ctrl(), def);
         lrgs.add(split, lrg);
+        std::cout << "added (2) split " << split->nt << '(' << split->uid << ')' << " to lrg " << lrg->lrg << std::endl;
         return split;
     }
 

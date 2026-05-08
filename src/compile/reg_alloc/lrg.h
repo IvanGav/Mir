@@ -143,8 +143,7 @@ struct LRG {
         this->mask = this->mask & lrg->mask;
     }
 
-    // TODO what the heck is this doing exactly?
-    Node* deep_split(Node* s0, Node* s1 ) {
+    Node* deep_split(Node* s0, Node* s1) {
         return s0 == nullptr || (s1 != nullptr && s0->ctrl()->loop_depth() < s1->ctrl()->loop_depth()) ? s1 : s0;
     }
 

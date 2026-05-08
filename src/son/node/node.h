@@ -197,6 +197,18 @@ struct NodeConst {
         return node::peephole(ptr);
     }
     static Node* create(i64 value) { return NodeConst::create(type::pool.int_const(value)); }
+    static Node* create_unscheduled(Node* c, Type* value) {
+        printd("CREATE UNSCHEDULED ON CONST GETS CALLED");
+        assert(c->nt == NodeType::Const);
+        NodeConst node = { 
+            .self = Node::create(NodeType::Const),
+            .val = value
+        };
+        Node* ptr = (Node*) Node::node_arena->push(node);
+        ptr->input = c->input.clone();
+        ptr->type = value;
+        return ptr;
+    }
 
     // Getters
     CFGNode* ctrl() { return self.input[0]; }

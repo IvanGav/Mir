@@ -93,6 +93,10 @@ struct Vec {
         size++;
     }
 
+    void swap(usize i1, usize i2) {
+        mem::swap<T>(data+i1, data+i2);
+    }
+
     T pop() {
         assert(size > 0);
         size--;

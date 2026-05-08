@@ -22,7 +22,6 @@ namespace reg_alloc {
     u32 biasable(Node* split);
     Reg bias_color(RegAlloc* alloc, Node* split, RegMask& mask);
     Reg bias_color_neighbors(RegAlloc* alloc, Node* split, RegMask& mask);
-    void swap(Vec<LRG*>& ary, u32 x, u32 y);
 
     // Map from a Basic Block to Live-Out: {a map from a Live Range to a Def}
     HMap<CFGNode*,HMap<LRG*,Node*>> bb_outs {};
@@ -42,6 +41,7 @@ namespace reg_alloc {
     
     // Set matching bit
     void add_ifg(LRG* lrg0, LRG* lrg1) {
+        std::cout << "IFG " << lrg0->lrg << " <-> " << lrg1->lrg << "\n";
         u16 x0 = lrg0->lrg;
         u16 x1 = lrg1->lrg;
         // Triangulate
@@ -104,7 +104,7 @@ namespace reg_alloc {
     void do_block(RegAlloc* alloc, CFGNode* bb) {
         mem::Arena scratch = mem::Arena::create(1 MB);
         assert(node::is_block_head(bb));
-        tmp.clear();
+        tmp = {};
         if(bb_outs.has(bb)) {
             tmp = bb_outs[bb].clone(&scratch);
         }
@@ -112,9 +112,9 @@ namespace reg_alloc {
         // A backwards walk over instructions in the basic block
         for(i32 inum = bb->output.size - 1; inum >= 0; inum--) {
             Node* n = bb->output[inum];
-            if(n->input[0] != bb) continue;
+            if(n->input[0] != bb) continue; // This stupid thing here... it should pass all nodes that are scheduled to `bb` including any CFGNode outputs... including CFGNode outputs which have more than 1 ctrl input... it fails only with anti-deps, pretty much. Such a stupid hack, urgh
             // In a backwards walk, proj users come before the node itself
-            if(node::is_multinode(n))
+            if(node::is_multinode(n)) // if it's an `NodeIf`...
                 for(Node* proj : n->output)
                     if(proj->nt == NodeType::Proj)
                         do_node(alloc, proj);
@@ -128,15 +128,16 @@ namespace reg_alloc {
 
         // Push live-sets backwards to priors in CFG.
         if(bb->nt == NodeType::Region || bb->nt == NodeType::Loop) {
-            for(u32 i = 1; i < bb->input.size; i++)
+            for(u32 i = 0; i < bb->ctrl_size(); i++) {
                 merge_live_out(alloc, bb, i);
+            }
         } else {
             merge_live_out(alloc, bb, 0);
         }
     }
 
     void do_node(RegAlloc* alloc, Node* n) {
-        mem::Arena scratch = mem::Arena::create(10 MB);
+        std::cout << "do_node " << n->nt << '(' << n->uid << ')' << std::endl; 
         // Defining means killing live LRG
         LRG* lrg = alloc->get_lrg(n);
         if(lrg != nullptr) {
@@ -156,9 +157,11 @@ namespace reg_alloc {
 
         // Interfere n with all live
         if(lrg != nullptr) {
+            std::cout << "  -- tmp contains: ";
             // Interfere n with all live
             for(P<LRG*,Node*>& tlrg_p : tmp) {
                 LRG* tlrg = tlrg_p.a;
+                std::cout << tlrg_p.b->nt << '(' << tlrg_p.b->uid << ')' << ", ";
                 assert(tlrg->is_leader());
                 // Skip self && do only when and register sets overlap
                 if(lrg != tlrg && lrg->mask.overlaps(tlrg->mask)) {
@@ -168,13 +171,15 @@ namespace reg_alloc {
                     // last tlrg register then only tlrg must fail.
                     if(x86::outregmap(n).is_size_1()) {
                         tlrg->mask = tlrg->mask - lrg->mask.first_reg();
-                        if(tlrg->mask.is_empty())
+                        if(tlrg->mask.is_empty()) {
                             alloc->fail(tlrg); // Clearing drives mask to empty
+                        }
                     } else {
                         add_ifg(lrg, tlrg); // Add interference
                     }
                 }
             }
+            std::cout << std::endl;
         }
 
 
@@ -182,6 +187,7 @@ namespace reg_alloc {
         // happens during the first round when a particular LRG splits.
         // Also record use-side spills for biased coloring.
         // Then make all inputs live.
+        assert(!n->cfg() || n->ctrl_size() == 1);
         for(u32 i = 1; i < n->input.size; i++) {
             Node* def = n->input[i];
             if(def == nullptr) continue;
@@ -272,30 +278,33 @@ namespace reg_alloc {
     // Merge TMP into bb's live-out set; if changes put bb on `work`
     void merge_live_out(RegAlloc* alloc, CFGNode* priorbb, u32 i) {
         CFGNode* bb = priorbb->ctrl(i);
-        if(bb == nullptr || bb == START_NODE) return; // Start has no prior
+        if(bb == nullptr) return; // Start has no prior
         if(!node::is_block_head(bb)) bb = bb->ctrl();
         //if( i==0 && !(bb instanceof StartNode) ) bb = bb.cfg0();
         assert(node::is_block_head(bb));
 
         // Lazy get live-out set for bb
         if(!bb_outs.has(bb)) {
-            bb_outs.add(bb, ref(HMap<LRG*,Node*>::create()));
+            bb_outs.add(bb, ref(HMap<LRG*,Node*>::create(default_arena))); // TODO scratch here
         }
         HMap<LRG*, Node*>& lrgs = bb_outs[bb];
 
+        std::cout << priorbb->nt << '(' << priorbb->uid << ')' << " has in tmp:\n";
         for(P<LRG*,Node*>& lrg_p : tmp) {
             LRG* lrg = lrg_p.a;
             Node* def = lrg_p.b;
+            std::cout << '\t' << def->nt << '(' << def->uid << ')' << " on lrg " << lrg->lrg << '\n';
             // Effective def comes from phi input from prior block
             if(def->nt == NodeType::Phi && def->ctrl() == priorbb) {
                 assert(i != 0);
-                def = def->input[i];
+                NodePhi* nphi = (NodePhi*) def;
+                def = nphi->data(i);
             }
             if(lrgs.has(lrg)) {
                 // Alive twice with different definitions; self-conflict
                 self_conflict(alloc, def, lrg, lrgs[lrg]);
             } else {
-                lrgs.add(lrg,def);
+                lrgs.add(lrg, def);
                 push_work(bb);
             }
         }
@@ -312,7 +321,8 @@ namespace reg_alloc {
             if(ifg_i.size == 0) continue; // shouldn't be required, but also shouldn't hurt
             LRG* lrg0 = alloc->unify_lrgs[i];
             for(u32 lrg = ifg_i.next_set_bit(0); lrg != U32_MAX; lrg = ifg_i.next_set_bit(lrg+1)) {
-                LRG* lrg1 = alloc->unify_lrgs[lrg]; // TODO fix here
+                LRG* lrg1 = alloc->unify_lrgs[lrg];
+                assert(lrg1 != nullptr);
                 lrg0->adj.push(lrg1);
                 lrg1->adj.push(lrg0);
             }
@@ -362,11 +372,11 @@ namespace reg_alloc {
             LRG* lrg = alloc->unify_lrgs[i];
             if(lrg == nullptr) continue; // Unified lrgs are null here
             color_stack[j] = lrg;
-            j++;
             if(lrg->low_degree()) {
-                reg_alloc::swap(color_stack, swork, j-1);
+                color_stack.swap(swork, j);
                 swork++;
             }
+            j++;
         }
 
         // Pull all lrgs from IFG, in trivial order if possible
@@ -375,10 +385,10 @@ namespace reg_alloc {
             pick_color(color_stack, sptr, swork);
 
             // Pick a trivial lrg, and (temporarily) remove from the IFG.
-            LRG* lrg = color_stack[sptr++];
+            LRG* lrg = color_stack[sptr];
+            sptr++;
             // If sptr was swork, then pulled an at-risk lrg
-            if(sptr > swork)
-                swork = sptr;
+            if(sptr > swork) swork = sptr;
 
             // Walk all neighbors and remove
             for(LRG* nlrg : lrg->adj) {
@@ -391,7 +401,7 @@ namespace reg_alloc {
                     while(color_stack[jx] != nlrg) jx++;
                     // Add trivial neighbor to trivial list.  Pull lrg j out of
                     // unknown set, since its now in the trivial set
-                    reg_alloc::swap(color_stack, swork++, jx);
+                    color_stack.swap(swork++, jx);
                 }
             }
         }
@@ -402,6 +412,14 @@ namespace reg_alloc {
             LRG* lrg = color_stack[sptr];
             if(lrg == nullptr) continue;
             RegMask& rmask = lrg->mask; // TODO CHECK HERE
+
+            // Debug: print pulled lrgs (colors), nodes that are in them and adjacencies (interferences)
+            // printd(lrg->lrg);
+            // printd(lrg->adj.size);
+            // printd(lrg->mask.regs);
+            // std::cout << "nodes in this lrg: "; for(P<Node*,LRG*>& p : alloc->lrgs) if(p.b == lrg) std::cout << p.a->nt << '(' << p.a->uid << ')' << ','; std::cout << std::endl;
+            // std::cout << "interferes with: "; for(LRG* p : lrg->adj) std::cout << p->lrg << ','; std::cout << std::endl;
+
             // Walk neighbors and remove adjacent colors
             for(LRG* nlrg : lrg->adj) {
                 if(!nlrg->adj.contains(lrg)) nlrg->adj.push(lrg); // less true to the Simple impl
@@ -433,7 +451,7 @@ namespace reg_alloc {
     void pick_color(Vec<LRG*>& color_stack, u32 sptr, u32 swork) {
         // Out of trivial colorable, pick an at-risk to pull
         if(sptr == swork)
-            reg_alloc::swap(color_stack, sptr, pick_risky(color_stack, sptr));
+            color_stack.swap(sptr, pick_risky(color_stack, sptr));
         // When coloring, we'd like to give more choices; so when coloring we'd
         // like to see the single-def first (since no choices anyway), then
         // non-split related (so more live ranges get colored), then
@@ -450,7 +468,7 @@ namespace reg_alloc {
             }
         }
         if(bidx != sptr) {
-            reg_alloc::swap(color_stack, sptr, bidx); // Pick best at sptr
+            color_stack.swap(sptr, bidx); // Pick best at sptr
         }
     }
 
@@ -497,10 +515,10 @@ namespace reg_alloc {
             Node* use = lrg->n_output;
             CFGNode* cfg = def->ctrl();
             // Different blocks OR Same block, but not close
-            if(cfg != use->ctrl() || cfg->output.index_of(def) < cfg->output.index_of(use) + 1)
+            if(cfg != use->ctrl() || cfg->output.index_of(def) < cfg->output.index_of(use) + 1) {
                 return 1000000;
+            }
         }
-
         // TODO: cost/benefit model.  Perhaps counting loop-depth (freq) of def/use for cost and "area" for benefit
         return 1000;
     }
@@ -591,10 +609,6 @@ namespace reg_alloc {
             }
         }
         return Reg::UNDEFINED; // No obvious color choice, but mask got trimmed
-    }
-
-    void swap(Vec<LRG*>& ary, u32 x, u32 y) {
-        LRG* tmp = ary[x]; ary[x] = ary[y]; ary[y] = tmp;
     }
     
     bool coalesce(RegAlloc* alloc) {
