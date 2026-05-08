@@ -180,6 +180,10 @@ struct NodeProj {
 struct NodeConst {
     // self.input = [ctrl]
     Node self;
+    u64 pad1;
+    u64 pad2;
+    u64 pad3;
+    u64 pad4;
     Type* val;
 
     // Constructors

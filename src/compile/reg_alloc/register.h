@@ -187,7 +187,14 @@ namespace x86 {
         return n->nt == NodeType::Const;
     }
     u32 two_address(Node* n) {
-        if(n->nt == NodeType::BinOp) return 1; // lhs must share output reg
+        if(n->nt == NodeType::BinOp) {
+            switch(n->op()) {
+                case Op::Eq: case Op::Neq: case Op::Less: case Op::Greater: case Op::LessEq: case Op::GreaterEq: 
+                    return false; // cmp doesn't modify any registers
+                default:
+                    return 1; // lhs must share output reg
+            }
+        }
         if(n->nt == NodeType::Store) return 0; // no output register at all
         if(n->nt == NodeType::UnOp)  return 1; // unary ops are also destructive on x86
         return 0;

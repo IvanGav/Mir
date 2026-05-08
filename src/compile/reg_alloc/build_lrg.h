@@ -64,7 +64,7 @@ namespace reg_alloc {
                         if(!x86::is_mach(n->output[0])) { assert(alloc->get_lrg(n) != nullptr); }
                         RegMask masko = x86::is_mach(n->output[0]) ? x86::regmap(n->output[0], uidx) : alloc->get_lrg(n)->mask;
                         if(!mask1.overlaps(masko) && mask2.overlaps(masko))
-                            mem::swap(n->input[1], n->input[2]);
+                            mem::swap(&n->input[1], &n->input[2]);
                     }
 
                     // Define live range
@@ -78,9 +78,6 @@ namespace reg_alloc {
                             if(lrg2 != nullptr) { // Anti-dep or other, no LRG
                                 RegMask use_mask = x86::regmap(n, i); // use_mask is also ~~null~~ **empty** for anti-dep
                                 lrg2->mach_output(n, (u16) i, use_mask.is_size_1()); // TODO MAYBE AN INCORRECT TRANSLATION, BE VERY CAREFUL HERE
-                                if(n->nt == NodeType::Ret) {
-                                    std::cout << "i have to be printed" << std::endl;
-                                }
                                 lrg2->mask = lrg2->mask & use_mask;
                                 if(lrg2->mask.is_empty())
                                     alloc->fail(lrg2); // Empty register mask, must split

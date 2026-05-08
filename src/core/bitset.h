@@ -52,13 +52,15 @@ struct BitSet {
 
     // may be extremely expensive, buuuttt
     usize next_set_bit(usize start) {
-        for(usize i = start/(sizeof(bits)*8); i < size; i++) {
+        usize i = start/(sizeof(bits)*8);
+        if(data[i] >> (start%8) == 0) i++;
+        for(; i < size; i++) {
             if(data[i] != 0) {
                 usize from = max(start, i*sizeof(bits)*8) % 8;
                 for(u32 j = from; j < sizeof(bits)*8; j++) {
-                    if((*this)[j]) return i*sizeof(bits)*8 + j;
+                    usize bi = i*sizeof(bits)*8 + j;
+                    if((*this)[bi]) return bi;
                 }
-                panic;
             }
         }
         return U32_MAX;

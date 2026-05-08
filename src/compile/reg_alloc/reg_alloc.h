@@ -82,7 +82,9 @@ struct RegAlloc {
         // Top driver: repeated rounds of coloring and splitting.
         u32 round = 0;
         while(!this->graph_color()) {
+            printd("split");
             this->split();
+            printd("postsplit");
             if(round >= 12) // Really expect to be done soon
                 panic;
             round++;
@@ -94,7 +96,7 @@ struct RegAlloc {
     bool graph_color() {
         failed.clear();
         lrgs.clear();
-        lrg_num = 1;
+        lrg_num = 1; // TODO stupid Simple ahh
         unify_lrgs.clear();
 
         bool build_lrg_success = reg_alloc::build_lrg(this);
@@ -234,11 +236,11 @@ struct RegAlloc {
             //   alloc
             //     V2/rax - kills prior RAX
             //   st4 [V1],len - No good, must split around
-            this->insert_after_and_replace(this->make_split(lrg), (Node*)lrg->n_input, false/*true*/);
+            this->insert_after_and_replace(this->make_split(lrg), lrg->n_input, false/*true*/);
         }
         // Split just before use
-        if(lrg->output_count == 1 || (lrg->input_count == 1 && ((Node*)lrg->n_input)->output.size == 1)) {
-            this->insert_before((Node*)lrg->n_output, lrg->uidx, lrg);
+        if(lrg->output_count == 1 || (lrg->input_count == 1 && lrg->n_input->output.size == 1)) {
+            this->insert_before(lrg->n_output, lrg->uidx, lrg);
         }
         return true;
     }
@@ -248,7 +250,7 @@ struct RegAlloc {
     // In of splitting once per use, start by splitting into groups based on
     // required input register.
     bool split_empty_mask_by_output(LRG* lrg) {
-        Node* def = (Node*)lrg->n_input;
+        Node* def = lrg->n_input;
 
         // Look at each use, and break into non-overlapping register classes.
         Vec<RegMask> rclass = {}; // TODO make scratch
@@ -350,7 +352,7 @@ struct RegAlloc {
 
         // Find min loop depth for all non-split defs and uses.
         P<u32,u32> ld {0,9999};
-        for(Node* n : this->ns ) {
+        for(Node* n : this->ns) {
             if(this->get_lrg(n) == lrg) // This is a LRG def
                 ld = this->ldepth(ld, n, n->ctrl());
             // PhiNodes check all CFG inputs
@@ -526,7 +528,7 @@ struct RegAlloc {
         // version without a known def yet; ctrl and val set later by insert_before/insert_after_and_replace
         // create with placeholders — caller is responsible for setting inputs
         assert(lrg->n_input != nullptr);
-        Node* def = (Node*) lrg->n_input;
+        Node* def = lrg->n_input;
         Node* split = NodeSplit::create_unscheduled(def->ctrl(), def);
         lrgs.add(split, lrg);
         return split;

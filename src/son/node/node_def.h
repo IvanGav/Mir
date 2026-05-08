@@ -238,10 +238,18 @@ struct Node {
     void insert_after(Node* input) {
         CFGNode* cfg = input->ctrl();
         u32 i = cfg->output.index_of(input) + 1;
-        if(node::is_multinode(input->ctrl())) { // TODO in simple, ->input[0] instead
-            assert(i == cfg->output.size+1);
-            i = cfg->output.index_of(input->ctrl()) + 1; // TODO in simple, ->input[0] instead
-        }
+        // if(node::is_multinode(input->ctrl())) { // TODO in simple, ->input[0] instead
+        //     // assert(i == cfg->output.size+1); // TODO this is present in Simple, (in a different way, but still)
+        //     assert(i <= cfg->output.size); // TODO this is the opposite of Simple's, but Claude says this..?
+        //     i = cfg->output.index_of(input->ctrl()) + 1; // TODO in simple, ->input[0] instead
+        //     assert(i != cfg->output.size); // TODO this is not in Simple, but cannot hurt to have
+        // }
+
+        // Claude says this is the right thing to do instead, in my case vvv
+        // if(node::is_multinode(input)) {
+        //     // input itself is a multinode head; skip past its projections
+        //     while(i < cfg->output.size && cfg->output[i]->nt == NodeType::Proj) i++;
+        // }
 
         while(cfg->output[i]->nt == NodeType::Phi) i++;
         cfg->output.insert(i, this);

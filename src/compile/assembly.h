@@ -53,6 +53,19 @@ namespace x86 {
         << std::endl;
     }
 
+    void emit_jump(std::ofstream& of, CFGNode* cfg) {
+        of << "  jmp .L" << cfg->cfgid << "\n";
+    }
+
+    // return null if not NodeType::CtrlProj or not outputting to a region
+    CFGNode* get_output_region(CFGNode* ctrl_proj) {
+        if(ctrl_proj->nt != NodeType::CtrlProj) return nullptr;
+        for(Node* n : ctrl_proj->output) {
+            if(n->nt == NodeType::Region || n->nt == NodeType::Loop) return n;
+        }
+        return nullptr;
+    }
+
     void emit(const char* output_file_path, RegAlloc* alloc) {
         std::ofstream of(output_file_path);
         emit_header(of);
@@ -60,8 +73,13 @@ namespace x86 {
             if(!node::is_block_head(bb)) continue;
             emit_cfg(of, alloc, bb);
             for(Node* n : bb->output) {
-                if(n->ctrl() != bb) { continue; } // not in this block GARBAGE, this is AI generated slop code, i'm just getting to cleaning it up, this prevents a crash BECAUSE my regalloc corrupts memory and this conveniently avoids the corrupted memory (by outputting a wrong assembly). So, it works INCORRECTLY with this uncommented, and I'm only keeping it uncommented for the git push BECAUSE i want it to at least not crash immidiately when pulled from main
+                // if(n->ctrl() != bb) { continue; } // not in this block GARBAGE, this is AI generated slop code, i'm just getting to cleaning it up, this prevents a crash BECAUSE my regalloc corrupts memory and this conveniently avoids the corrupted memory (by outputting a wrong assembly). So, it works INCORRECTLY with this uncommented, and I'm only keeping it uncommented for the git push BECAUSE i want it to at least not crash immidiately when pulled from main
                 emit_node(of, alloc, n);
+            }
+            // at the end of the branch, jump to uniting region
+            CFGNode* region = get_output_region(bb);
+            if(region) {
+                emit_jump(of, region);
             }
         }
         emit_footer(of);
@@ -119,34 +137,21 @@ namespace x86 {
                 of << "  jmp return\n"; // THIS IS HOW YOU RETURN IN MIR FROM NOW ON I GUESS
                 break;
             }
-            // CFG nodes themselves emit labels or jumps, handled separately
-            default: break;
-        }
-    }
-
-    void emit_label(std::ofstream& of, CFGNode* bb) {
-        of << ".L" << bb->cfgid << ":\n";
-    }
-
-    void emit_cfg(std::ofstream& of, RegAlloc* alloc, CFGNode* bb) {
-        switch(bb->nt) {
             case NodeType::If: {
                 // The condition was computed into some register by a BinOp comparison.
                 // You need a `test`/`cmp` + conditional jump.
                 // The true proj (index 0) is the fall-through or taken branch.
-                NodeIf* ifc = (NodeIf*) bb;
+                NodeIf* ifc = (NodeIf*) n;
                 // find the proj targets
                 CFGNode* true_bb  = nullptr;
                 CFGNode* false_bb = nullptr;
-                for(Node* out : bb->output) {
+                for(Node* out : n->output) {
                     if(out->nt == NodeType::CtrlProj) {
                         NodeProj* p = (NodeProj*) out;
                         if(p->index == 0) true_bb  = out; // taken
                         else              false_bb = out; // not taken
                     }
                 }
-
-                // in emit_cfg, for NodeType::If:
                 Node* cond_node = ifc->condition();
                 if(cond_node->nt == NodeType::BinOp) {
                     NodeBinOp* cmp = (NodeBinOp*) cond_node;
@@ -162,19 +167,27 @@ namespace x86 {
                         default: panic;
                     }
                     of << "  " << jcc << " .L" << true_bb->cfgid << "\n";
-                    of << "  jmp .L" << false_bb->cfgid << "\n";
+                    emit_jump(of, false_bb);
                 } else {
                     warn;
                     // condition register
                     Str cond = reg(alloc, ifc->condition());
                     of << "  test " << cond << ", " << cond << "\n";
                     of << "  jnz .L" << true_bb->cfgid << "\n";
-                    of << "  jmp .L" << false_bb->cfgid << "\n";
+                    emit_jump(of, false_bb);
                 }
                 break;
             }
-            case NodeType::Region:
-            case NodeType::Loop:
+            default: break;
+        }
+    }
+
+    void emit_label(std::ofstream& of, CFGNode* bb) {
+        of << ".L" << bb->cfgid << ":\n";
+    }
+
+    void emit_cfg(std::ofstream& of, RegAlloc* alloc, CFGNode* bb) {
+        switch(bb->nt) {
             case NodeType::Start: // already printing _start, so doesn't matter
                 // fall through from predecessor, or back-edge jump already emitted
                 break;

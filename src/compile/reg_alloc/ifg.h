@@ -48,8 +48,7 @@ namespace reg_alloc {
         if(x0 < x1) {
             if(ifg.size <= x0) { ifg.resize(next_power_of_two(x0+1)); }
             ifg[x0].set(x1); // Add x1 to x0's conflict set
-        }
-        else {
+        } else {
             if(ifg.size <= x1) { ifg.resize(next_power_of_two(x1+1)); }
             ifg[x1].set(x0); // Add x0 to x1's conflict set
         }
@@ -149,8 +148,7 @@ namespace reg_alloc {
 
         // Phis use and define the same live range, i.e. these LRGs already
         // marked conflicted, no need to mark again
-        if(n->nt == NodeType::Phi)
-            return;
+        if(n->nt == NodeType::Phi) return;
 
         // Kill any killed registers; milli-code routines like New can kill will not being a CFG.
         if(x86::is_mach(n))
@@ -169,7 +167,7 @@ namespace reg_alloc {
                     // must fail.  If *n* (a subset of lrg) needs the single
                     // last tlrg register then only tlrg must fail.
                     if(x86::outregmap(n).is_size_1()) {
-                        tlrg->mask = tlrg->mask - lrg->mask.first_reg(); // TODO MAKE ABSOLUTELY SURE THAT SHOULD MUTATE
+                        tlrg->mask = tlrg->mask - lrg->mask.first_reg();
                         if(tlrg->mask.is_empty())
                             alloc->fail(tlrg); // Clearing drives mask to empty
                     } else {
@@ -204,7 +202,7 @@ namespace reg_alloc {
                         Node* live = tlrg_p.b;
                         if(live != def && x86::is_mach(live) && x86::outregmap(live).overlaps(ni_mask)) {
                             // Deny the register, since it absolutely must be used here
-                            tlrg->mask = tlrg->mask - ni_mask.first_reg(); // TODO MAKE ABSOLUTELY SURE THIS SHOULD MUTATE
+                            tlrg->mask = tlrg->mask - ni_mask.first_reg();
                             if(tlrg->mask.is_empty()) {
                                 // Then direct reg-reg conflict between use here (at n.in(i)) and def (of tlrg) there.
                                 // Fail the older live range, it must move its register.
@@ -314,7 +312,7 @@ namespace reg_alloc {
             if(ifg_i.size == 0) continue; // shouldn't be required, but also shouldn't hurt
             LRG* lrg0 = alloc->unify_lrgs[i];
             for(u32 lrg = ifg_i.next_set_bit(0); lrg != U32_MAX; lrg = ifg_i.next_set_bit(lrg+1)) {
-                LRG* lrg1 = alloc->unify_lrgs[lrg];
+                LRG* lrg1 = alloc->unify_lrgs[lrg]; // TODO fix here
                 lrg0->adj.push(lrg1);
                 lrg1->adj.push(lrg0);
             }
@@ -406,9 +404,9 @@ namespace reg_alloc {
             RegMask& rmask = lrg->mask; // TODO CHECK HERE
             // Walk neighbors and remove adjacent colors
             for(LRG* nlrg : lrg->adj) {
-                // if(!nlrg->adj.contains(lrg)) nlrg->adj.push(lrg); // less true to the Simple impl
-                assert(nlrg->adj[nlrg->adj.size] == lrg); // more true to the Simple impl
-                nlrg->adj.size++;
+                if(!nlrg->adj.contains(lrg)) nlrg->adj.push(lrg); // less true to the Simple impl
+                // nlrg->adj.size++;
+                // assert(nlrg->adj[nlrg->adj.size-1] == lrg); // more true to the Simple impl
 
                 Reg reg = nlrg->reg;
                 if(reg != Reg::UNDEFINED) // Failed neighbors do not count
@@ -631,7 +629,7 @@ namespace reg_alloc {
                         }
                     }
                     // Most constrained mask
-                    RegMask new_mask = v1->mask & v2->mask; // TODO CHECK HERE should not mutate.. right?
+                    RegMask new_mask = v1->mask & v2->mask;
                     // Check for capacity
                     if(v2->adj.size >= new_mask.size()) {
                         // Fails capacity, will not be trivial colorable
