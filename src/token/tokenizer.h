@@ -40,6 +40,14 @@ struct Tokenizer {
 
     void reset() { at = 0; }
 
+    usize get_cur_line_num() {
+        usize lines = 1;
+        for(usize i = 0; i < at; i++) {
+            if(source[i] == '\n') lines++;
+        }
+        return lines;
+    }
+
     // return '\0' if at end of file
     // be careful at exclusive while loops (such as one in `Tokenizer::skip_comment()`)
     u8 peek() { if(this->eof()) { return '\0'; } return source[at]; }

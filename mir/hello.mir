@@ -1,19 +1,8 @@
 let i: i64 = 3;
-#let arr: i64[10];
-#arr[1] = 10;
-##
+
 if(arg < 9) { 
     i = i + arg + 10; 
 } else {
     i = i + arg;
-};
-##
-while(arg < 10) {
-    arg = arg + 1;
-    if(i == 9) {
-        i = 0;
-    } else {
-        i = i + 1;
-    };
 };
 return i + arg;

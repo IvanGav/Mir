@@ -261,7 +261,7 @@ struct Node {
         CFGNode* cfg = output->ctrl();
         u32 i;
         if(output->nt == NodeType::Phi) {
-            cfg = output->ctrl()->ctrl(uidx);
+            cfg = output->ctrl()->ctrl(uidx-1); // ARGHHGHGHH
             assert(cfg->output.size > 0);
             i = cfg->output.size - 1; // TODO why -1?
         } else {

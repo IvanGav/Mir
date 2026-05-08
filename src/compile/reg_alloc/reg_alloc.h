@@ -96,8 +96,6 @@ struct RegAlloc {
         lrg_num = 1; // TODO stupid Simple ahh
         unify_lrgs.clear();
 
-        std::cout << "GRAPH COLOR CALLED" << std::endl;
-
         bool build_lrg_success = reg_alloc::build_lrg(this);
         if(!build_lrg_success) { printd(build_lrg_success); return false; }
         bool build_ifg_success = reg_alloc::build_ifg(this);
@@ -132,7 +130,7 @@ struct RegAlloc {
         lrg = default_arena.push(LRG::create(lrg_num));
         lrg_num++;
         lrgs.add(n, lrg);
-        std::cout << "added " << n->nt << '(' << n->uid << ')' << " to lrg " << lrg->lrg << std::endl;
+        logd("added " << n->nt << '(' << n->uid << ')' << " to lrg " << lrg->lrg);
         return lrg;
     }
 
@@ -143,7 +141,7 @@ struct RegAlloc {
         LRG* lrg2 = lrg->find_leader();
         if(lrg != lrg2) {
             lrgs.add(n, lrg2);
-            std::cout << "added " << n->nt << '(' << n->uid << ')' << " to lrg " << lrg2->lrg << std::endl;
+            logd("added " << n->nt << '(' << n->uid << ')' << " to lrg " << lrg2->lrg);
         }
         return lrg2;
     }
@@ -160,7 +158,7 @@ struct RegAlloc {
         if(lrgs.has(n)) { lrgn = lrgs[n]; }
         LRG* lrg3 = lrg->union_with(lrgn);
         lrgs.add(n, lrg3);
-        std::cout << "added " << n->nt << '(' << n->uid << ')' << " to lrg " << lrg3->lrg << std::endl;
+        logd("added " << n->nt << '(' << n->uid << ')' << " to lrg " << lrg3->lrg);
         return lrg3;
     }
 
@@ -323,11 +321,12 @@ struct RegAlloc {
                 Node* use = def->output[i];
                 // TODO this needs to be done right
                 if((use->nt == NodeType::Phi && 
-                    !(use->ctrl()->nt == NodeType::Loop && use->input[2] == def && 
+                    !(use->ctrl()->nt == NodeType::Loop && ((NodePhi*)use)->data(1) == def && 
                     def->ctrl()->idepth() > use->ctrl()->idepth())) ||
                     (x86::is_mach(use) && x86::two_address(use) != 0 && use->input[x86::two_address(use)] == def)
                 ) {
-                    this->insert_before(use, use->input.index_of(def), lrg);
+                    u32 index_of_def = use->input.index_of(def);
+                    this->insert_before(use, index_of_def, lrg);
                 }
             }
             // Split after the Phi which extends the LRG.  Split also before
@@ -490,7 +489,7 @@ struct RegAlloc {
     void insert_before(Node* n, u32 i, LRG* lrg, bool skip = true) {
         Node* def = n->input[i];
         // Effective block for use
-        CFGNode* cfg = n->nt == NodeType::Phi ? n->ctrl()->ctrl(i) : n->ctrl();
+        CFGNode* cfg = n->nt == NodeType::Phi ? n->ctrl()->ctrl(i-1) : n->ctrl(); // -1 because phis have data nodes 1 indexed and i hate SImple
         // Def is a split ?
         if(skip && def->nt == NodeType::Split) {
             bool single_reg = x86::is_mach(n) && x86::regmap(n,i).is_size_1();
@@ -525,7 +524,7 @@ struct RegAlloc {
         printd(def->nt);
         Node* split = x86::is_mach(def) && x86::is_clone(def) ? x86::copy_node(def) : NodeSplit::create_unscheduled(def->ctrl(), def);
         this->lrgs.add(split, lrg);
-        std::cout << "added split " << split->nt << '(' << split->uid << ')' << " to lrg " << lrg->lrg << std::endl;
+        logd("added split " << split->nt << '(' << split->uid << ')' << " to lrg " << lrg->lrg);
         return split;
     }
     // returns a NodeSplit
@@ -536,7 +535,7 @@ struct RegAlloc {
         Node* def = lrg->n_input;
         Node* split = NodeSplit::create_unscheduled(def->ctrl(), def);
         lrgs.add(split, lrg);
-        std::cout << "added (2) split " << split->nt << '(' << split->uid << ')' << " to lrg " << lrg->lrg << std::endl;
+        logd("added (2) split " << split->nt << '(' << split->uid << ')' << " to lrg " << lrg->lrg);
         return split;
     }
 

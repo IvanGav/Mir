@@ -607,6 +607,7 @@ struct NodeSplit {
     static Node* create_unscheduled(Node* ctrl, Node* val) { // TODO this can be a source of some bugs.. it shouldn't be integrated into the graph in a normal way, since it's done during regalloc, post scheduling...
         assert(ctrl != nullptr && ctrl->cfg());
         assert(val != nullptr);
+        assert(val->nt != NodeType::CtrlProj);
         NodeSplit node = { .self = Node::create(NodeType::Split) };
         Node* ptr = (Node*) Node::node_arena->push(node);
         ptr->input.push(ctrl);        // ctrl edge, but do NOT do ctrl->output.push(ptr) TODO SHOULD I?

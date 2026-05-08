@@ -50,7 +50,7 @@ enum RegBit : u16 {
     bR15 = 1<<R15
 };
 
-Str regname[16] {"RAX"_s,"RBX"_s,"RCX"_s,"RDX"_s,"RSI"_s,"RDI"_s,"RSP"_s,"RBP"_s,"R08"_s,"R09"_s,"R10"_s,"R11"_s,"R12"_s,"R13"_s,"R14"_s,"R15"_s};
+Str regname[16] {"rax"_s,"rbx"_s,"rcx"_s,"rdx"_s,"rsi"_s,"rdi"_s,"rsp"_s,"rbp"_s,"r8"_s,"r9"_s,"r10"_s,"r11"_s,"r12"_s,"r13"_s,"r14"_s,"r15"_s};
 
 struct RegMask {
     u64 regs; // additional 48 bits are for spills and stuff
@@ -150,19 +150,7 @@ namespace x86 {
     }
     RegMask outregmap(Node* n) {
         switch(n->nt) {
-            case NodeType::BinOp:// {
-                // switch(n->op()) {
-                    // case Op::Eq:
-                    // case Op::Neq:
-                    // case Op::Less:
-                    // case Op::Greater:
-                    // case Op::LessEq:
-                    // case Op::GreaterEq:
-                    //     return RegMask{0}; // no materialized boolean result // TODO is this right??
-                //     default:
-                //         return WMASK;
-                // }
-            // }
+            case NodeType::BinOp:
             case NodeType::UnOp:
             case NodeType::Const:
             case NodeType::Load:
@@ -221,9 +209,10 @@ namespace x86 {
             case Op::BitAnd:
             case Op::BitOr:
             case Op::BitXor:
-            case Op::Eq:
-            case Op::Neq:
                 return true;
+            case Op::Eq: // TODO really should be ... but oh well
+            case Op::Neq:
+                return false;
             default:
                 return false;
         }

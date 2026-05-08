@@ -13,6 +13,49 @@ namespace x86 {
         return regname[r]; // names of registers, in `register.h`
     }
 
+    // vvv TODO this is a hack to get it looking like it works for the design expo.. delete later and actually fix. The real solution would be to insert splits in the if branches for constants... or something like that i think.
+    bool const_used_only_by_phis(Node* n) {
+        if(n->nt != NodeType::Const) return false;
+        if(n->output.size == 0) return false;
+
+        for(Node* use : n->output) {
+            if(use->nt != NodeType::Phi) return false;
+        }
+
+        return true;
+    }
+
+    void emit_phi_edge_moves(std::ofstream& of, RegAlloc* alloc, CFGNode* pred, CFGNode* succ) {
+        if(!(succ->nt == NodeType::Region || succ->nt == NodeType::Loop)) return;
+
+        u32 pred_idx = succ->input.index_of(pred);
+        assert(pred_idx != succ->input.size);
+
+        for(Node* out : succ->output) {
+            if(out->nt != NodeType::Phi) continue;
+
+            NodePhi* phi = (NodePhi*)out;
+
+            if(out->type->ttype == TypeT::Mem) continue;
+
+            Node* src = phi->data(pred_idx);
+            Node* dst = out;
+
+            if(src->nt == NodeType::Const) {
+                NodeConst* c = (NodeConst*)src;
+                assert(c->val->ttype == TypeT::Int);
+                i64 val = ((TypeInt*)c->val)->val();
+
+                // Important: write the constant into the PHI register,
+                // not the Const node's scheduled register.
+                of << "  mov " << reg(alloc, dst) << ", " << val << "\n";
+            } else {
+                of << "  mov " << reg(alloc, dst) << ", " << reg(alloc, src) << "\n";
+            }
+        }
+    }
+    // ^^^ also at the same time remove anything with TODO HACK
+
     void emit_header(std::ofstream& of) {
         of << 
 "# arg is in rdi, return in rax\n"
@@ -57,11 +100,19 @@ namespace x86 {
         of << "  jmp .L" << cfg->cfgid << "\n";
     }
 
-    // return null if not NodeType::CtrlProj or not outputting to a region
-    CFGNode* get_output_region(CFGNode* ctrl_proj) {
-        if(ctrl_proj->nt != NodeType::CtrlProj) return nullptr;
-        for(Node* n : ctrl_proj->output) {
-            if(n->nt == NodeType::Region || n->nt == NodeType::Loop) return n;
+    bool is_terminal_in_block(Node* n) {
+        if(n == nullptr) return true; // this is a weird edge case where, if there's nothing to output to, there's a "terminal", it's uhhh
+        return n->nt == NodeType::If || n->nt == NodeType::Ret;
+    }
+
+    CFGNode* first_block_successor(CFGNode* bb) {
+        for(Node* out : bb->output) {
+            if(!out->cfg()) continue;
+
+            // These are real successor block heads.
+            if(node::is_block_head(out)) {
+                return out;
+            }
         }
         return nullptr;
     }
@@ -73,13 +124,14 @@ namespace x86 {
             if(!node::is_block_head(bb)) continue;
             emit_cfg(of, alloc, bb);
             for(Node* n : bb->output) {
-                // if(n->ctrl() != bb) { continue; } // not in this block GARBAGE, this is AI generated slop code, i'm just getting to cleaning it up, this prevents a crash BECAUSE my regalloc corrupts memory and this conveniently avoids the corrupted memory (by outputting a wrong assembly). So, it works INCORRECTLY with this uncommented, and I'm only keeping it uncommented for the git push BECAUSE i want it to at least not crash immidiately when pulled from main
+                if(const_used_only_by_phis(n)) continue; // TODO HACK
                 emit_node(of, alloc, n);
             }
             // at the end of the branch, jump to uniting region
-            CFGNode* region = get_output_region(bb);
-            if(region) {
-                emit_jump(of, region);
+            CFGNode* cfg_out = first_block_successor(bb);
+            if(!is_terminal_in_block(cfg_out)) {
+                emit_phi_edge_moves(of, alloc, bb, cfg_out); // TODO HACK
+                emit_jump(of, cfg_out);
             }
         }
         emit_footer(of);
@@ -105,8 +157,10 @@ namespace x86 {
                     case Op::Add: of << "  add " << dst << ", " << rhs << "\n"; break;
                     case Op::Sub: of << "  sub " << dst << ", " << rhs << "\n"; break;
                     case Op::Mul: of << "  imul " << dst << ", " << rhs << "\n"; break;
-                    // TODO comparisons need special handling
-                    default: break;
+                    // TODO HACK comparisons are printed in ifs.. yes that *does* mean that I cannot do `i = 1 == 2` but for now.. whatever
+                    case Op::Less: case Op::LessEq: case Op::Greater: case Op::GreaterEq: case Op::Eq: case Op::Neq:
+                        break;
+                    default: panic; // unhandled ops are bad
                 }
                 break;
             }

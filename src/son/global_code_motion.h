@@ -270,11 +270,11 @@ namespace gcm {
             Node* n = work.pop();
             // assert(late[n->uid] == nullptr); // No double visit
             if(late[n->uid] != nullptr) { continue; } // No double visit
-            // std::cout << ">> " << n->uid << std::endl;
             // These we know the late schedule of, and need to set early for loops
             if(n->cfg()) {
+                if(n->nt == NodeType::Stop) late[n->uid] = n; // TODO HACK hope this works =) just
                 // we want to get the head of a block we schedule, and n->ctrl() will always get the head when `n` is a tail
-                late[n->uid] = node::is_block_head(n) ? n : n->ctrl(); // note that calling `ctrl(void)` on CFG nodes will assert they have only (CFG) input; just a minor error check
+                else late[n->uid] = node::is_block_head(n) ? n : n->ctrl(); // note that calling `ctrl(void)` on CFG nodes will assert they have only (CFG) input; just a minor error check
             } else if(n->pinned()) {
                 // we know the only possible cfg block of a pinned node; pinned = `Phi` or `Proj`
                 late[n->uid] = n->ctrl();

@@ -41,7 +41,7 @@ namespace reg_alloc {
     
     // Set matching bit
     void add_ifg(LRG* lrg0, LRG* lrg1) {
-        std::cout << "IFG " << lrg0->lrg << " <-> " << lrg1->lrg << "\n";
+        logd("IFG " << lrg0->lrg << " <-> " << lrg1->lrg);
         u16 x0 = lrg0->lrg;
         u16 x1 = lrg1->lrg;
         // Triangulate
@@ -137,7 +137,7 @@ namespace reg_alloc {
     }
 
     void do_node(RegAlloc* alloc, Node* n) {
-        std::cout << "do_node " << n->nt << '(' << n->uid << ')' << std::endl; 
+        logd("do_node " << n->nt << '(' << n->uid << ')');
         // Defining means killing live LRG
         LRG* lrg = alloc->get_lrg(n);
         if(lrg != nullptr) {
@@ -157,11 +157,11 @@ namespace reg_alloc {
 
         // Interfere n with all live
         if(lrg != nullptr) {
-            std::cout << "  -- tmp contains: ";
+            logd("  -- tmp contains: ");
             // Interfere n with all live
             for(P<LRG*,Node*>& tlrg_p : tmp) {
                 LRG* tlrg = tlrg_p.a;
-                std::cout << tlrg_p.b->nt << '(' << tlrg_p.b->uid << ')' << ", ";
+                logd(tlrg_p.b->nt << '(' << tlrg_p.b->uid << ')' << ", ");
                 assert(tlrg->is_leader());
                 // Skip self && do only when and register sets overlap
                 if(lrg != tlrg && lrg->mask.overlaps(tlrg->mask)) {
@@ -179,7 +179,6 @@ namespace reg_alloc {
                     }
                 }
             }
-            std::cout << std::endl;
         }
 
 
@@ -289,11 +288,11 @@ namespace reg_alloc {
         }
         HMap<LRG*, Node*>& lrgs = bb_outs[bb];
 
-        std::cout << priorbb->nt << '(' << priorbb->uid << ')' << " has in tmp:\n";
+        logd(priorbb->nt << '(' << priorbb->uid << ')' << " has in tmp:");
         for(P<LRG*,Node*>& lrg_p : tmp) {
             LRG* lrg = lrg_p.a;
             Node* def = lrg_p.b;
-            std::cout << '\t' << def->nt << '(' << def->uid << ')' << " on lrg " << lrg->lrg << '\n';
+            logd('\t' << def->nt << '(' << def->uid << ')' << " on lrg " << lrg->lrg);
             // Effective def comes from phi input from prior block
             if(def->nt == NodeType::Phi && def->ctrl() == priorbb) {
                 assert(i != 0);

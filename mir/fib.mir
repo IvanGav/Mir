@@ -1,0 +1,48 @@
+let i0: i64 = 0;
+let i1: i64 = 1;
+let cur = 1;
+
+while(cur < arg) {
+    let tmp: i64 = i0+i1;
+    i0 = i1;
+    i1 = tmp;
+    cur = cur + 1;
+};
+
+return i1;
+
+#let i: i64 = 3;
+##
+if(arg < 9) { 
+    i = i + arg + 10; 
+} else {
+    i = i + arg;
+};
+##
+##
+while(arg < 10) {
+    arg = arg + 1;
+    if(i == 9) {
+        i = 0;
+    } else {
+        i = i + 1;
+    };
+};
+##
+
+#return i + arg;
+
+##
+let a: i64 = 1;
+let b: i64 = 1;
+
+let iter: i64 = 5;
+
+while(iter > 0) {
+    a = a + b;
+    b = a - b;
+    iter = iter - 1;
+};
+
+return b;
+##

@@ -56,6 +56,7 @@ namespace reg_alloc {
                 } else if(x86::is_mach(n)) {
                     // Attempt to commute ops to keep live ranges compatible.
                     if(x86::commutes(n) && n->output.size == 1) {
+                        // TODO breaks for cmp nodes that are commute, because their output can be an `If`...
                         u32 uidx = n->output[0]->input.index_of(n);
                         if(!x86::is_mach(n->input[1])) { assert(alloc->get_lrg(n->input[1]) != nullptr); }
                         RegMask mask1 = x86::is_mach(n->input[1]) ? x86::outregmap(n->input[1]) : alloc->get_lrg(n->input[1])->mask;

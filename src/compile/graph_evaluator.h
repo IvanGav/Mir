@@ -32,6 +32,7 @@ struct Evaluator {
 
     static Node* find_projection(Node* node, u32 i) {
         for(Node* output : node->output) {
+            printd(output->nt);
             if((output->nt == NodeType::CtrlProj || output->nt == NodeType::Proj) && ((NodeProj*)output)->index == i)
                 return output;
         }
@@ -110,6 +111,10 @@ struct Evaluator {
         if(parameter1 != nullptr) cache_values.add(parameter1, parameter);
         Node* control = this->find_projection(start, 0);
         Node* prev = start;
+        printd(control == nullptr ? -1 : control->uid);
+        printd(prev == nullptr ? -1 : prev->uid);
+        printd(start == nullptr ? -1 : start->uid);
+        printd(cache_values.size);
         while(control != nullptr) {
             Node* next;
             switch(control->nt) {
@@ -143,6 +148,7 @@ struct Evaluator {
             }
             prev = control;
             control = next;
+            printd(next->nt);
         }
         printe("Evaluator Runtime Error", "Fallthrough");
         return 0;
