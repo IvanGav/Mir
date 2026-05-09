@@ -1,8 +1,6 @@
-let i: i64 = 3;
-
-if(arg < 9) { 
-    i = i + arg + 10; 
-} else {
-    i = i + arg;
+let x = 2;
+x = x * x + x * x;
+while (x > 4) {
+    x = x / 2;
 };
-return i + arg;
+return x;
