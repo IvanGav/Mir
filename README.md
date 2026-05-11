@@ -4,14 +4,17 @@
 
 - Compile: `make`
   - `make good` to enable optimizations and exclude debug flags (when compiling my code with g++, not in `mirc` compiler)
-- Run: `./mirc [src file]`
+- Run: `./mirc -s [src file]`
   - If no source file is specified, default is `mir/hello.mir`
   - `graph.gv` will automatically be generated, representing the graph of the program
   - `mir.s` will automatically be generated, being the compiled assembly of the program
 - Render abstract syntax graph: `make graph` (`dot -Tpng -O graph.gv`)
   - Install `dot` with `sudo apt install graphviz`
+  - `make graph` will create an image `graph.gv.png`
 - Assemble the `mir.s`: `make assemble` (`gcc -nostdlib -no-pie -o mir.out mir.s`)
   - Install `gcc` with `sudo apt install build-essential`
+  - `make assemble` will create an executable `mir.out`
+- Run with `./mirc -e #` to run the graph evaluator with the given arg instead. Will not emit assembly, use for testing of the SoN graph correctness. Does not support arrays.
 
 ## Code hierarchy
 
