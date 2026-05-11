@@ -299,8 +299,8 @@ struct Parser {
 
             // apply if conditions are met (a modified version of the shunting yard algorithm)
             while(op_stack.size > 0 && op::has_precedence(
-                op::from_str(op_stack.back().val),
-                op::from_str(op_node.val)
+                op::binary(op_stack.back().val),
+                op::binary(op_node.val)
             )) {
                 assert(val_stack.size >= 2);
                 Token apply_op = op_stack.pop();
